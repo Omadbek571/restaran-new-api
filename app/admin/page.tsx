@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-// Menu va X ikonkalarini import qilish
+import dynamic from "next/dynamic"
 import {
   BarChart3,
   Calendar,
@@ -49,26 +49,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import axios from "axios"
 
-// Mock data for dashboard
-const salesData = [
-  { date: "Dushanba", amount: 1250000 },
-  { date: "Seshanba", amount: 1420000 },
-  { date: "Chorshanba", amount: 1380000 },
-  { date: "Payshanba", amount: 1520000 },
-  { date: "Juma", amount: 1850000 },
-  { date: "Shanba", amount: 2100000 },
-  { date: "Yakshanba", amount: 1950000 },
-]
+// ApexCharts dinamik import (SSR muammolarini oldini olish uchun)
+const Chart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
-const topProducts = [
-  { name: "Osh", quantity: 145, revenue: 5075000 },
-  { name: "Lag'mon", quantity: 98, revenue: 2940000 },
-  { name: "Shashlik", quantity: 87, revenue: 3915000 },
-  { name: "Burger", quantity: 76, revenue: 2432000 },
-  { name: "Coca-Cola", quantity: 210, revenue: 2520000 },
-]
-
+// Xodimlar va rollar uchun mock data
 const employees = [
   {
     id: 1,
@@ -120,24 +106,139 @@ const roles = [
   { id: 5, name: "Yetkazuvchi", permissions: ["delivery_access", "order_update"], count: 4 },
 ]
 
-const recentOrders = [
-  { id: 1, customer: "Stol 3", items: 5, total: 136000, status: "completed", date: "2023-05-15 14:30" },
-  { id: 2, customer: "Alisher", items: 3, total: 84000, status: "completed", date: "2023-05-15 15:45" },
-  { id: 3, customer: "Stol 5", items: 2, total: 38000, status: "completed", date: "2023-05-15 16:20" },
-  { id: 4, customer: "Dilshod", items: 7, total: 215000, status: "completed", date: "2023-05-15 17:10" },
-  { id: 5, customer: "Stol 1", items: 4, total: 125000, status: "completed", date: "2023-05-15 18:05" },
-]
-
 export default function AdminDashboard() {
   const router = useRouter()
+  const [token, setToken] = useState("")
+  const [isClient, setIsClient] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
   const [showAddEmployeeDialog, setShowAddEmployeeDialog] = useState(false)
   const [showAddRoleDialog, setShowAddRoleDialog] = useState(false)
   const [dateRange, setDateRange] = useState("weekly")
   const [showMobileSidebar, setShowMobileSidebar] = useState(false)
+  const [recentOrders, setRecentOrders] = useState([])
+  const [topProducts, setTopProducts] = useState([])
+  const [showAllOrders, setShowAllOrders] = useState(false)
+  const [salesData, setSalesData] = useState([])
+  const [stats, setStats] = useState({
+    todays_sales: { value: 0, change_percent: 0, comparison_period: "" },
+    todays_orders: { value: 0, change_percent: 0, comparison_period: "" },
+    average_check: { value: 0, change_percent: 0, comparison_period: "" },
+    active_employees: { value: 0, change_absolute: 0, comparison_period: "" },
+  })
+  const [errorMessage, setErrorMessage] = useState("")
+  const [xodim, setXodim] = useState([])
+
+  // API dan buyurtmalarni olish
+  useEffect(() => {
+    axios.get(`https://oshxonacopy.pythonanywhere.com/api/orders/`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((res) => {
+        setRecentOrders(res.data)
+      })
+      .catch((err) => {
+        console.error(err)
+        setErrorMessage("Buyurtmalarni yuklashda xatolik yuz berdi")
+      })
+  }, [])
+
+  // Top sotilgan mahsulotlarni olish
+  useEffect(() => {
+    axios.get(`https://oshxonacopy.pythonanywhere.com/api/admin/dashboard/top-products/?period=${dateRange}`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((res) => {
+        setTopProducts(res.data)
+      })
+      .catch((err) => {
+        console.error(err)
+        setErrorMessage("Mahsulotlarni yuklashda xatolik yuz berdi")
+      })
+  }, [dateRange])
+
+  // API dan haftalik savdo ma'lumotlarini olish
+  useEffect(() => {
+    axios.get(`https://oshxonacopy.pythonanywhere.com/api/admin/dashboard/sales-chart/`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((res) => {
+        setSalesData(res.data)
+      })
+      .catch((err) => {
+        console.error("Sales Chart Error:", err)
+        setErrorMessage("Savdo grafigini yuklashda xatolik yuz berdi")
+      })
+  }, [])
+
+  // API dan statistika ma'lumotlarini olish
+  useEffect(() => {
+    axios.get(`https://oshxonacopy.pythonanywhere.com/api/admin/dashboard/stats/`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((res) => {
+        setStats(res.data) // API dan kelgan ma'lumotlarni stats holatiga o'rnatamiz
+      })
+      .catch((err) => {
+        console.error("Stats Error:", err)
+        setErrorMessage("Statistikani yuklashda xatolik yuz berdi")
+      })
+  }, [])
+
+  // Xodimlarni olish
+
+  useEffect(() => {
+    axios.get(`https://oshxonacopy.pythonanywhere.com/api/admin/users/`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    })
+      .then((res) => {
+        console.log(209, res.data);
+        setXodim(res.data)
+      })
+      .catch((err) => {
+        console.log(err);
+
+      })
+  }, [])
+
+  // Tokenni tekshirish va sahifani client tomonida yuklash
+  useEffect(() => {
+    setIsClient(true)
+    const storedToken = localStorage.getItem("token")
+    setToken(storedToken || "")
+    if (!storedToken) {
+      router.push("/auth")
+    }
+  }, [router])
 
   const handleLogout = () => {
+    localStorage.removeItem("token")
     router.push("/auth")
+  }
+
+  const displayedOrders = showAllOrders ? recentOrders : recentOrders.slice(0, 5)
+
+  // Agar client tomonida bo'lmasa, yuklash indikatorini ko'rsatish
+  if (!isClient) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-lg">Yuklanmoqda...</p>
+      </div>
+    )
   }
 
   return (
@@ -385,6 +486,9 @@ export default function AdminDashboard() {
 
         {/* Dashboard content */}
         <main className="flex-1 overflow-auto bg-slate-50 p-4 dark:bg-slate-900">
+          {/* Xato xabari */}
+          {errorMessage && <div className="bg-red-100 text-red-800 p-3 rounded mb-4">{errorMessage}</div>}
+
           {/* Dashboard Tab */}
           {activeTab === "dashboard" && (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -394,8 +498,10 @@ export default function AdminDashboard() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">2,850,000 so'm</div>
-                  <p className="text-xs text-muted-foreground">+20.1% o'tgan haftaga nisbatan</p>
+                  <div className="text-2xl font-bold">{stats.todays_sales.value.toLocaleString()} so'm</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.todays_sales.change_percent}% {stats.todays_sales.comparison_period}
+                  </p>
                 </CardContent>
               </Card>
               <Card>
@@ -404,8 +510,10 @@ export default function AdminDashboard() {
                   <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">+48</div>
-                  <p className="text-xs text-muted-foreground">+12.2% o'tgan haftaga nisbatan</p>
+                  <div className="text-2xl font-bold">+{stats.todays_orders.value}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.todays_orders.change_percent}% {stats.todays_orders.comparison_period}
+                  </p>
                 </CardContent>
               </Card>
               <Card>
@@ -414,8 +522,10 @@ export default function AdminDashboard() {
                   <CreditCard className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">59,375 so'm</div>
-                  <p className="text-xs text-muted-foreground">+2.5% o'tgan haftaga nisbatan</p>
+                  <div className="text-2xl font-bold">{stats.average_check.value.toLocaleString()} so'm</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.average_check.change_percent}% {stats.average_check.comparison_period}
+                  </p>
                 </CardContent>
               </Card>
               <Card>
@@ -424,32 +534,56 @@ export default function AdminDashboard() {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">12</div>
-                  <p className="text-xs text-muted-foreground">+2 o'tgan oyga nisbatan</p>
+                  <div className="text-2xl font-bold">{stats.active_employees.value}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.active_employees.change_absolute} {stats.active_employees.comparison_period}
+                  </p>
                 </CardContent>
               </Card>
 
+              {/* Haftalik savdo grafigi */}
               <Card className="col-span-full md:col-span-2">
                 <CardHeader>
                   <CardTitle>Haftalik savdo</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[200px] w-full">
-                    {/* This would be a chart in a real app */}
-                    <div className="flex h-full items-end gap-2">
-                      {salesData.map((day) => (
-                        <div key={day.date} className="relative flex w-full flex-col items-center">
-                          <div
-                            className="w-full rounded-md bg-primary"
-                            style={{
-                              height: `${(day.amount / 2100000) * 100}%`,
-                            }}
-                          />
-                          <span className="mt-2 text-xs">{day.date.substring(0, 2)}</span>
-                        </div>
-                      ))}
+                  {salesData.length > 0 ? (
+                    <div className="h-[200px] w-full">
+                      {isClient && (
+                        <Chart
+                          options={{
+                            chart: {
+                              id: "weekly-sales-chart",
+                              toolbar: { show: false },
+                            },
+                            xaxis: {
+                              categories: salesData.map((day) => day.date),
+                              labels: {
+                                rotate: -45,
+                                style: { fontSize: "12px" },
+                              },
+                            },
+                            yaxis: {
+                              title: { text: "Savdo (so'm)" },
+                              labels: { formatter: (value) => `${value.toLocaleString()}` },
+                            },
+                            dataLabels: { enabled: false },
+                            stroke: { curve: "smooth", width: 2 },
+                            colors: ["#1E90FF"],
+                            grid: { borderColor: "#e7e7e7" },
+                            tooltip: { y: { formatter: (value) => `${value.toLocaleString()} so'm` } },
+                          }}
+                          series={[{ name: "Savdo", data: salesData.map((day) => day.sales) }]}
+                          type="line"
+                          height={200}
+                        />
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="h-[200px] flex items-center justify-center">
+                      <p className="text-muted-foreground">Ma'lumotlar mavjud emas</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -459,13 +593,14 @@ export default function AdminDashboard() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm">
-                        Haftalik <ChevronDown className="ml-2 h-4 w-4" />
+                        {dateRange === "daily" ? "Kunlik" : dateRange === "weekly" ? "Haftalik" : "Oylik"}
+                        <ChevronDown className="ml-2 h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Kunlik</DropdownMenuItem>
-                      <DropdownMenuItem>Haftalik</DropdownMenuItem>
-                      <DropdownMenuItem>Oylik</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setDateRange("daily")}>Kunlik</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setDateRange("weekly")}>Haftalik</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setDateRange("monthly")}>Oylik</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </CardHeader>
@@ -479,13 +614,21 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {topProducts.map((product) => (
-                        <TableRow key={product.name}>
-                          <TableCell>{product.name}</TableCell>
-                          <TableCell className="text-right">{product.quantity}</TableCell>
-                          <TableCell className="text-right">{product.revenue.toLocaleString()} so'm</TableCell>
+                      {topProducts.length > 0 ? (
+                        topProducts.map((value, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{value.product_name}</TableCell>
+                            <TableCell className="text-right">{value.quantity}</TableCell>
+                            <TableCell className="text-right">{value.sales.toLocaleString()} so'm</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center">
+                            Hozircha ma'lumotlar mavjud emas
+                          </TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -505,34 +648,48 @@ export default function AdminDashboard() {
                       <TableRow>
                         <TableHead>ID</TableHead>
                         <TableHead>Mijoz</TableHead>
-                        <TableHead>Mahsulotlar</TableHead>
+                        <TableHead>Buyurtma turi</TableHead>
                         <TableHead>Jami</TableHead>
                         <TableHead>Holat</TableHead>
                         <TableHead>Sana</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {recentOrders.map((order) => (
-                        <TableRow key={order.id}>
-                          <TableCell>#{order.id}</TableCell>
-                          <TableCell>{order.customer}</TableCell>
-                          <TableCell>{order.items}</TableCell>
-                          <TableCell>{order.total.toLocaleString()} so'm</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-green-100 text-green-800">
-                              {order.status === "completed" ? "Yakunlangan" : "Jarayonda"}
-                            </Badge>
+                      {displayedOrders.length > 0 ? (
+                        displayedOrders.map((order) => (
+                          <TableRow key={order.id}>
+                            <TableCell>#{order.id}</TableCell>
+                            <TableCell>{order.customer_name || "Noma'lum"}</TableCell>
+                            <TableCell>{order.order_type_display}</TableCell>
+                            <TableCell>{parseFloat(order.final_price).toLocaleString()} so'm</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-green-100 text-green-800">
+                                {order.status_display}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(order.created_at).toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center">
+                            Hozircha buyurtmalar mavjud emas
                           </TableCell>
-                          <TableCell>{order.date}</TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
                 <CardFooter className="flex items-center justify-center border-t px-6 py-4">
-                  <Button variant="outline" className="w-full">
-                    Barcha buyurtmalarni ko'rish
-                  </Button>
+                  {showAllOrders ? (
+                    <Button variant="outline" className="w-full" onClick={() => setShowAllOrders(false)}>
+                      Yopish
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="w-full" onClick={() => setShowAllOrders(true)}>
+                      Barcha buyurtmalarni ko'rish
+                    </Button>
+                  )}
                 </CardFooter>
               </Card>
             </div>
@@ -576,7 +733,7 @@ export default function AdminDashboard() {
                         <CardTitle className="text-sm font-medium">Jami savdo</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">11,470,000 so'm</div>
+                        <div className="text-2xl font-bold">{stats.todays_sales.value.toLocaleString()} so'm</div>
                       </CardContent>
                     </Card>
                     <Card>
@@ -584,7 +741,7 @@ export default function AdminDashboard() {
                         <CardTitle className="text-sm font-medium">Buyurtmalar soni</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">193</div>
+                        <div className="text-2xl font-bold">{stats.todays_orders.value}</div>
                       </CardContent>
                     </Card>
                     <Card>
@@ -592,15 +749,15 @@ export default function AdminDashboard() {
                         <CardTitle className="text-sm font-medium">O'rtacha chek</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">59,430 so'm</div>
+                        <div className="text-2xl font-bold">{stats.average_check.value.toLocaleString()} so'm</div>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Foyda</CardTitle>
+                        <CardTitle className="text-sm font-medium">Faol xodimlar</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">4,588,000 so'm</div>
+                        <div className="text-2xl font-bold">{stats.active_employees.value}</div>
                       </CardContent>
                     </Card>
                   </div>
@@ -620,20 +777,31 @@ export default function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="h-[300px]">
-                        {/* This would be a chart in a real app */}
-                        <div className="flex h-full items-end gap-2">
-                          {salesData.map((day) => (
-                            <div key={day.date} className="relative flex w-full flex-col items-center">
-                              <div
-                                className="w-full rounded-md bg-primary"
-                                style={{
-                                  height: `${(day.amount / 2100000) * 100}%`,
-                                }}
-                              />
-                              <span className="mt-2 text-xs">{day.date}</span>
-                            </div>
-                          ))}
-                        </div>
+                        {salesData.length > 0 && isClient ? (
+                          <Chart
+                            options={{
+                              chart: { id: "sales-dynamics", toolbar: { show: false } },
+                              xaxis: {
+                                categories: salesData.map((day) => day.date),
+                                labels: { rotate: -45, style: { fontSize: "12px" } },
+                              },
+                              yaxis: {
+                                title: { text: "Savdo (so'm)" },
+                                labels: { formatter: (value) => `${value.toLocaleString()}` },
+                              },
+                              dataLabels: { enabled: false },
+                              colors: ["#1E90FF"],
+                              grid: { borderColor: "#e7e7e7" },
+                            }}
+                            series={[{ name: "Savdo", data: salesData.map((day) => day.sales) }]}
+                            type="bar"
+                            height={300}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <p className="text-muted-foreground">Ma'lumotlar mavjud emas</p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -645,7 +813,6 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent>
                         <div className="h-[200px]">
-                          {/* This would be a pie chart in a real app */}
                           <div className="flex h-full items-center justify-center">
                             <PieChart className="h-32 w-32 text-muted-foreground" />
                           </div>
@@ -672,7 +839,6 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent>
                         <div className="h-[200px]">
-                          {/* This would be a pie chart in a real app */}
                           <div className="flex h-full items-center justify-center">
                             <PieChart className="h-32 w-32 text-muted-foreground" />
                           </div>
@@ -711,16 +877,24 @@ export default function AdminDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {topProducts.map((product) => (
-                            <TableRow key={product.name}>
-                              <TableCell>{product.name}</TableCell>
-                              <TableCell className="text-right">{product.quantity}</TableCell>
-                              <TableCell className="text-right">{product.revenue.toLocaleString()} so'm</TableCell>
-                              <TableCell className="text-right">
-                                {Math.round(product.revenue * 0.4).toLocaleString()} so'm
+                          {topProducts.length > 0 ? (
+                            topProducts.map((product, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{product.product_name}</TableCell>
+                                <TableCell className="text-right">{product.quantity}</TableCell>
+                                <TableCell className="text-right">{product.sales.toLocaleString()} so'm</TableCell>
+                                <TableCell className="text-right">
+                                  {Math.round(product.sales * 0.4).toLocaleString()} so'm
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center">
+                                Hozircha ma'lumotlar mavjud emas
                               </TableCell>
                             </TableRow>
-                          ))}
+                          )}
                         </TableBody>
                       </Table>
                     </CardContent>
@@ -836,7 +1010,8 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {employees.map((employee) => (
+                      {/* shu erga yozilishi kere edi ////////////////////////////////////////////////////// */}
+                      {/* {employees.map((employee) => (
                         <TableRow key={employee.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
@@ -885,7 +1060,63 @@ export default function AdminDashboard() {
                             </DropdownMenu>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ))} */}
+                      {/* ////////////////// */}
+                      {
+                        xodim.length > 0 &&
+                        xodim.map(function (value, index) {
+                          return (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar>
+                                    <AvatarImage src={value.image || "/placeholder.svg"} />
+                                    <AvatarFallback>
+                                      {`${value.first_name[0] ?? ""}${value.last_name[0] ?? ""}`.toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="font-medium">
+                                      {value.first_name} {value.last_name}
+                                    </p>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>{value.role?.name}</TableCell>
+                              <TableCell>{value.username}</TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={value.is_active ? "success" : "outline"}
+                                  className={
+                                    value.is_active
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-slate-100 text-slate-800"
+                                  }
+                                >
+                                  {value.is_active ? "Faol" : "Faol emas"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <ChevronDown className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem>Tahrirlash</DropdownMenuItem>
+                                    <DropdownMenuItem>PIN-kodni o'zgartirish</DropdownMenuItem>
+                                    <DropdownMenuItem>Holatni o'zgartirish</DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-red-600">O'chirish</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      }
+
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -986,7 +1217,7 @@ export default function AdminDashboard() {
                       <TableRow>
                         <TableHead>ID</TableHead>
                         <TableHead>Mijoz</TableHead>
-                        <TableHead>Mahsulotlar</TableHead>
+                        <TableHead>Buyurtma turi</TableHead>
                         <TableHead>Jami</TableHead>
                         <TableHead>Holat</TableHead>
                         <TableHead>Sana</TableHead>
@@ -994,35 +1225,43 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {recentOrders.map((order) => (
-                        <TableRow key={order.id}>
-                          <TableCell>#{order.id}</TableCell>
-                          <TableCell>{order.customer}</TableCell>
-                          <TableCell>{order.items}</TableCell>
-                          <TableCell>{order.total.toLocaleString()} so'm</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-green-100 text-green-800">
-                              {order.status === "completed" ? "Yakunlangan" : "Jarayonda"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{order.date}</TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem>Batafsil</DropdownMenuItem>
-                                <DropdownMenuItem>Chek chiqarish</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-600">Bekor qilish</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                      {recentOrders.length > 0 ? (
+                        recentOrders.map((order) => (
+                          <TableRow key={order.id}>
+                            <TableCell>#{order.id}</TableCell>
+                            <TableCell>{order.customer_name || "Noma'lum"}</TableCell>
+                            <TableCell>{order.order_type_display}</TableCell>
+                            <TableCell>{parseFloat(order.final_price).toLocaleString()} so'm</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-green-100 text-green-800">
+                                {order.status_display}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(order.created_at).toLocaleString()}</TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem>Batafsil</DropdownMenuItem>
+                                  <DropdownMenuItem>Chek chiqarish</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-red-600">Bekor qilish</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center">
+                            Hozircha buyurtmalar mavjud emas
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -1071,7 +1310,7 @@ export default function AdminDashboard() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Tizim sozlamalari</CardTitle>
+                  <CardTitle>Tizim soIconszlamalari</CardTitle>
                   <CardDescription>Tizimning asosiy sozlamalarini o'zgartirish</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

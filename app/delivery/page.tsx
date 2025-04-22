@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import axios from "axios"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 
 export default function DeliveryPage() {
   const router = useRouter()
@@ -38,6 +40,7 @@ export default function DeliveryPage() {
     const token = localStorage.getItem("token")
     if (!token) {
       router.push("/auth")
+      toast.info("Tizimga kirish uchun autentifikatsiya talab qilinadi")
       setIsLoading(false)
       return
     }
@@ -85,10 +88,15 @@ export default function DeliveryPage() {
             item_count: order.item_count || 0,
           }))
         setOrders(deliveryOrders)
+        if (deliveryOrders.length === 0) {
+          toast.warn("Hozirda yetkazib berish buyurtmalari mavjud emas")
+        }
       })
       .catch((err) => {
         console.error("Buyurtmalarni yuklashda xato:", err)
-        setError("Buyurtmalarni yuklashda xato yuz berdi: " + (err.response?.data?.message || err.message))
+        const errorMessage = err.response?.data?.message || err.message
+        setError("Buyurtmalarni yuklashda xato yuz berdi: " + errorMessage)
+        toast.error("Buyurtmalarni yuklashda xato yuz berdi")
         setOrders([])
       })
       .finally(() => {
@@ -108,6 +116,7 @@ export default function DeliveryPage() {
       const token = localStorage.getItem("token")
       if (!token) {
         setError("Autentifikatsiya tokeni topilmadi")
+        toast.error("Autentifikatsiya tokeni topilmadi")
         return
       }
 
@@ -127,27 +136,32 @@ export default function DeliveryPage() {
           order.id === orderId ? { ...order, status: "delivering" } : order
         )
       )
+      toast.success(`Buyurtma #${orderId} yetkazish boshlandi!`)
     } catch (err) {
       console.error("Yetkazishni boshlashda xato:", err)
-      setError(
-        "Yetkazishni boshlashda xato yuz berdi: " +
-          (err.response?.data?.message || err.message)
-      )
+      const errorMessage = err.response?.data?.message || err.message
+      setError("Yetkazishni boshlashda xato yuz berdi: " + errorMessage)
+      toast.error("Yetkazishni boshlashda xato yuz berdi")
     }
   }
 
   const handleCompleteDelivery = async (orderId) => {
     const order = orders.find((o) => o.id === orderId)
-    if (!order) return
+    if (!order) {
+      toast.warn("Buyurtma topilmadi")
+      return
+    }
 
     if (!order.isPaid && order.paymentMethod === "cash") {
       setSelectedOrder(order)
       setShowDeliveryCompleteDialog(true)
+      toast.info(`Buyurtma #${orderId} uchun naqd to'lov qabul qilinadi`)
     } else {
       try {
         const token = localStorage.getItem("token")
         if (!token) {
           setError("Autentifikatsiya tokeni topilmadi")
+          toast.error("Autentifikatsiya tokeni topilmadi")
           return
         }
 
@@ -167,23 +181,32 @@ export default function DeliveryPage() {
             order.id === orderId ? { ...order, status: "delivered", isPaid: true } : order
           )
         )
+        toast.success(`Buyurtma #${orderId} yetkazildi!`)
       } catch (err) {
         console.error("Yetkazib berishni yakunlashda xato:", err)
-        setError(
-          "Yetkazib berishni yakunlashda xato yuz berdi: " +
-            (err.response?.data?.message || err.message)
-        )
+        const errorMessage = err.response?.data?.message || err.message
+        setError("Yetkazib berishni yakunlashda xato yuz berdi: " + errorMessage)
+        toast.error("Yetkazib berishni yakunlashda xato yuz berdi")
       }
     }
   }
 
   const handleFinalizeDelivery = async () => {
-    if (!selectedOrder) return
+    if (!selectedOrder) {
+      toast.warn("Buyurtma tanlanmagan")
+      return
+    }
+
+    if (!cashReceived || Number.parseInt(cashReceived) < selectedOrder.total) {
+      toast.error("Qabul qilingan summa yetarli emas")
+      return
+    }
 
     try {
       const token = localStorage.getItem("token")
       if (!token) {
         setError("Autentifikatsiya tokeni topilmadi")
+        toast.error("Autentifikatsiya tokeni topilmadi")
         return
       }
 
@@ -209,12 +232,12 @@ export default function DeliveryPage() {
       setSelectedOrder(null)
       setDeliveryNote("")
       setCashReceived("")
+      toast.success(`Buyurtma #${selectedOrder.id} muvaffaqiyatli yetkazildi!`)
     } catch (err) {
       console.error("Yetkazib berishni yakunlashda xato:", err)
-      setError(
-        "Yetkazib berishni yakunlashda xato yuz berdi: " +
-          (err.response?.data?.message || err.message)
-      )
+      const errorMessage = err.response?.data?.message || err.message
+      setError("Yetkazib berishni yakunlashda xato yuz berdi: " + errorMessage)
+      toast.error("Yetkazib berishni yakunlashda xato yuz berdi")
     }
   }
 
@@ -223,6 +246,7 @@ export default function DeliveryPage() {
       const token = localStorage.getItem("token")
       if (!token) {
         setError("Autentifikatsiya tokeni topilmadi")
+        toast.error("Autentifikatsiya tokeni topilmadi")
         return
       }
 
@@ -267,9 +291,12 @@ export default function DeliveryPage() {
       })
 
       setShowOrderDetailsDialog(true)
+      toast.info(`Buyurtma #${order.id} tafsilotlari yuklandi`)
     } catch (err) {
       console.error("Batafsil ma'lumot olishda xato:", err)
-      setError("Batafsil ma'lumot olishda xato yuz berdi: " + (err.response?.data?.message || err.message))
+      const errorMessage = err.response?.data?.message || err.message
+      setError("Batafsil ma'lumot olishda xato yuz berdi: " + errorMessage)
+      toast.error("Batafsil ma'lumot olishda xato yuz berdi")
     }
   }
 
@@ -302,7 +329,9 @@ export default function DeliveryPage() {
   }
 
   const handleLogout = () => {
+    localStorage.removeItem("token")
     router.push("/auth")
+    toast.info("Tizimdan chiqildi")
   }
 
   if (isLoading) {
@@ -311,6 +340,20 @@ export default function DeliveryPage() {
 
   return (
     <div className="flex h-screen flex-col">
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+
       <header className="flex h-16 items-center justify-between border-b bg-background px-4">
         <div className="flex items-center space-x-4">
           <Button variant="ghost" size="icon" onClick={() => router.push("/auth")}>

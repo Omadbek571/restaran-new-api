@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
+import { Separator } from "@/components/ui/separator" // Tuzatilgan qator
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import axios from "axios"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 
 // Joylar (API’dagi `zone` maydoniga moslashtirildi)
 const places = [
@@ -21,11 +23,11 @@ const places = [
 
 export default function POSPage() {
   const [products, setProducts] = useState([])
-  const [categories, setCategories] = useState([]) // Dinamik kategoriyalar uchun state
+  const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true) // Kategoriyalarni yuklash holati
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
   const [error, setError] = useState("")
-  const [errorCategories, setErrorCategories] = useState("") // Kategoriyalar uchun xatolik
+  const [errorCategories, setErrorCategories] = useState("")
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [cart, setCart] = useState([])
@@ -60,6 +62,7 @@ export default function POSPage() {
       .catch((err) => {
         console.error("Kategoriyalarni yuklashda xato:", err)
         setErrorCategories("Kategoriyalarni yuklashda xato yuz berdi")
+        toast.error("Kategoriyalarni yuklashda xato yuz berdi")
         setIsLoadingCategories(false)
       })
   }, [])
@@ -81,6 +84,7 @@ export default function POSPage() {
       .catch((err) => {
         console.error("Mahsulotlarni yuklashda xato:", err)
         setError("Mahsulotlarni yuklashda xato yuz berdi")
+        toast.error("Mahsulotlarni yuklashda xato yuz berdi")
         setIsLoading(false)
       })
   }, [])
@@ -100,6 +104,7 @@ export default function POSPage() {
       })
       .catch((err) => {
         console.error("Stollar yuklashda xato:", err)
+        toast.error("Stollarni yuklashda xato yuz berdi")
         setIsLoadingTables(false)
       })
   }
@@ -134,18 +139,19 @@ export default function POSPage() {
       )
     } else {
       setCart([...cart, { id: product.id, product, quantity: 1 }])
+      toast.success(`${product.name} savatga qo'shildi!`)
     }
   }
 
   // Buyurtma yuborish funksiyasi
   function submitOrder() {
     if (cart.length === 0) {
-      alert("Savat bo‘sh! Iltimos, mahsulot qo‘shing.")
+      toast.warn("Savat bo‘sh! Iltimos, mahsulot qo‘shing.")
       return
     }
 
     if (orderType === "dine_in" && !selectedTable) {
-      alert("Iltimos, stol tanlang!")
+      toast.warn("Iltimos, stol tanlang!")
       setShowTableDialog(true)
       return
     }
@@ -153,7 +159,7 @@ export default function POSPage() {
     if (orderType === "takeaway" || orderType === "delivery") {
       if (!customerInfo.name || !customerInfo.phone || (orderType === "delivery" && !customerInfo.address)) {
         setShowCustomerDialog(true)
-        alert(
+        toast.warn(
           orderType === "delivery"
             ? "Iltimos, mijoz nomi, telefon raqami va manzilini kiriting!"
             : "Iltimos, mijoz nomi va telefon raqamini kiriting!"
@@ -182,7 +188,7 @@ export default function POSPage() {
         },
       })
       .then((res) => {
-        alert("Buyurtma muvaffaqiyatli yuborildi!")
+        toast.success("Buyurtma muvaffaqiyatli yuborildi!")
         setCart([])
         setCustomerInfo({ name: "", phone: "", address: "" })
         setShowCustomerDialog(false)
@@ -191,14 +197,19 @@ export default function POSPage() {
       })
       .catch((err) => {
         console.error("Buyurtma yuborishda xato:", err)
-        alert("Buyurtma yuborishda xato yuz berdi. Iltimos, qayta urinib ko‘ring.")
+        toast.error("Buyurtma yuborishda xato yuz berdi. Iltimos, qayta urinib ko‘ring.")
       })
   }
 
   // Yangi mahsulot qo‘shish funksiyasi
   function handleAddFoodSubmit() {
     if (!categories.length) {
-      alert("Kategoriyalar yuklanmadi. Iltimos, sahifani qayta yuklang.")
+      toast.warn("Kategoriyalar yuklanmadi. Iltimos, sahifani qayta yuklang.")
+      return
+    }
+
+    if (!newFood.name || !newFood.price || !newFood.category) {
+      toast.warn("Iltimos, barcha maydonlarni to‘ldiring!")
       return
     }
 
@@ -207,7 +218,7 @@ export default function POSPage() {
     formData.append("name", newFood.name)
     formData.append("price", newFood.price)
     formData.append("category_id", newFood.category)
-    formData.append("is_active", newFood.is_active.toString()) // API hujjatiga ko‘ra, is_active boolean bo‘lishi kerak
+    formData.append("is_active", newFood.is_active.toString())
     if (newFood.image) formData.append("image", newFood.image)
 
     axios
@@ -230,19 +241,19 @@ export default function POSPage() {
           })
           .then((res) => {
             setProducts(res.data)
-            alert("Mahsulot muvaffaqiyatli qo‘shildi!")
+            toast.success("Mahsulot muvaffaqiyatli qo‘shildi!")
           })
           .catch((err) => {
             console.error("Mahsulotlarni qayta yuklashda xato:", err)
-            alert("Mahsulotlarni qayta yuklashda xato yuz berdi")
+            toast.error("Mahsulotlarni qayta yuklashda xato yuz berdi")
           })
 
         setIsSubmitting(false)
       })
       .catch((err) => {
         console.error("Mahsulot qo‘shishda xato:", err)
-        const errorMessage = err.response?.data?.detail || err.response?.data?.category_id?.[0] || "Mahsulot qo‘shishda xato yuz berdi";
-        alert(errorMessage)
+        const errorMessage = err.response?.data?.detail || err.response?.data?.category_id?.[0] || "Mahsulot qo‘shishda xato yuz berdi"
+        toast.error(errorMessage)
         setIsSubmitting(false)
       })
   }
@@ -250,15 +261,22 @@ export default function POSPage() {
   // Mijoz ma'lumotlarini saqlash
   function handleCustomerInfoSave() {
     if (!customerInfo.name || !customerInfo.phone || (orderType === "delivery" && !customerInfo.address)) {
+      toast.warn(
+        orderType === "delivery"
+          ? "Iltimos, mijoz nomi, telefon raqami va manzilini kiriting!"
+          : "Iltimos, mijoz nomi va telefon raqamini kiriting!"
+      )
       return
     }
     setShowCustomerDialog(false)
+    toast.success("Mijoz ma'lumotlari saqlandi!")
   }
 
   // Savatdan mahsulotni kamaytirish
   function decreaseQuantity(item) {
     if (item.quantity === 1) {
       setCart(cart.filter((cartItem) => cartItem.id !== item.id))
+      toast.info(`${item.product.name} savatdan o‘chirildi`)
     } else {
       setCart(
         cart.map((cartItem) =>
@@ -290,11 +308,26 @@ export default function POSPage() {
   function handleLogout() {
     localStorage.removeItem("token")
     window.location.href = "/auth"
+    toast.info("Tizimdan chiqildi")
   }
 
   // UI qismi (return)
   return (
     <div className="flex h-screen flex-col">
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+
       {/* Header */}
       <header className="flex h-16 items-center justify-between border-b bg-background px-4">
         <div className="flex items-center space-x-4">
@@ -564,6 +597,7 @@ export default function POSPage() {
                       onClick={() => {
                         setSelectedTable(table.id)
                         setShowTableDialog(false)
+                        toast.success(`Stol ${table.name} tanlandi`)
                       }}
                     >
                       <div className="text-center">

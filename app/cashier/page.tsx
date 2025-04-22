@@ -20,6 +20,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import axios from "axios"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 
 export default function CashierPage() {
   const router = useRouter()
@@ -41,6 +43,7 @@ export default function CashierPage() {
     const token = localStorage.getItem("token")
     if (!token) {
       router.push("/auth")
+      toast.info("Tizimga kirish uchun autentifikatsiya talab qilinadi")
       setIsLoading(false)
       return
     }
@@ -55,10 +58,14 @@ export default function CashierPage() {
       .then((res) => {
         console.log("Tayyor buyurtmalar API javobi:", res.data)
         setOrders(res.data || [])
+        if (res.data.length === 0) {
+          toast.warn("Hozirda tayyor buyurtmalar mavjud emas")
+        }
       })
       .catch((err) => {
         console.error("Tayyor buyurtmalarni yuklashda xato:", err)
         setErrorOrders("Tayyor buyurtmalarni yuklashda xato yuz berdi")
+        toast.error("Tayyor buyurtmalarni yuklashda xato yuz berdi")
       })
 
     axios
@@ -71,10 +78,14 @@ export default function CashierPage() {
       .then((res) => {
         console.log("To'langan buyurtmalar tarixi API javobi:", res.data)
         setPaymentHistory(res.data || [])
+        if (res.data.length === 0) {
+          toast.warn("To'langan buyurtmalar tarixi mavjud emas")
+        }
       })
       .catch((err) => {
         console.error("To'langan buyurtmalar tarixini yuklashda xato:", err)
         setErrorHistory("To'langan buyurtmalar tarixini yuklashda xato yuz berdi")
+        toast.error("To'langan buyurtmalar tarixini yuklashda xato yuz berdi")
       })
       .finally(() => {
         setIsLoading(false)
@@ -91,43 +102,54 @@ export default function CashierPage() {
 
   const handleSelectOrder = (order) => {
     setSelectedOrder(order)
+    toast.info(`Buyurtma #${order.id} tanlandi`)
   }
 
   const handlePayment = () => {
     if (selectedOrder) {
       setShowPaymentDialog(true)
+    } else {
+      toast.warn("Iltimos, avval buyurtmani tanlang")
     }
   }
 
   const handleCompletePayment = async () => {
-    if (!selectedOrder) return
+    if (!selectedOrder) {
+      toast.warn("Buyurtma tanlanmagan")
+      return
+    }
 
     setPaymentError("")
     const token = localStorage.getItem("token")
     if (!token) {
       setPaymentError("Tizimga kirish sessiyasi tugagan. Iltimos, qayta kiring.")
       router.push("/auth")
+      toast.error("Tizimga kirish sessiyasi tugagan")
       return
     }
 
     if (!paymentMethod) {
       setPaymentError("Iltimos, to'lov usulini tanlang.")
+      toast.error("To'lov usuli tanlanmagan")
       return
     }
 
     const allowedMethods = ["cash", "card", "mobile"]
     if (!allowedMethods.includes(paymentMethod)) {
       setPaymentError("Noto'g'ri to'lov usuli tanlandi.")
+      toast.error("Noto'g'ri to'lov usuli")
       return
     }
 
     if (paymentMethod === "mobile" && !selectedMobileProvider) {
       setPaymentError("Iltimos, mobil to'lov provayderini tanlang (Payme, Click yoki Apelsin).")
+      toast.error("Mobil to'lov provayderi tanlanmagan")
       return
     }
 
     if (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) <= 0)) {
       setPaymentError("Iltimos, qabul qilingan summani to'g'ri kiriting.")
+      toast.error("Qabul qilingan summa noto'g'ri")
       return
     }
 
@@ -157,22 +179,24 @@ export default function CashierPage() {
 
       setShowPaymentDialog(false)
       setShowReceiptDialog(true)
+      toast.success(`Buyurtma #${selectedOrder.id} uchun to'lov muvaffaqiyatli yakunlandi!`)
     } catch (err) {
       console.error("To'lovni amalga oshirishda xato:", err)
-      setPaymentError(
+      const errorMessage =
         err.response?.data?.detail ||
         err.response?.data?.method?.[0] ||
         "To'lovni amalga oshirishda xato yuz berdi. Iltimos, qayta urinib ko'ring."
-      )
+      setPaymentError(errorMessage)
+      toast.error(errorMessage)
     }
   }
 
   const handlePrintReceipt = () => {
-    alert("Chek chop etilmoqda...")
+    toast.info("Chek chop etilmoqda...")
     setShowReceiptDialog(false)
 
     if (selectedOrder && selectedOrder.order_type === "dine_in") {
-      alert(`Stol ${selectedOrder.table?.name || "Noma'lum"} bo'shatildi!`)
+      toast.info(`Stol ${selectedOrder.table?.name || "Noma'lum"} bo'shatildi!`)
     }
 
     setSelectedOrder(null)
@@ -190,6 +214,20 @@ export default function CashierPage() {
 
   return (
     <div className="flex h-screen flex-col">
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+
       <header className="flex h-16 items-center justify-between border-b bg-background px-4">
         <div className="flex items-center space-x-4">
           <Button variant="ghost" size="icon" onClick={() => router.push("/pos")}>
@@ -198,7 +236,15 @@ export default function CashierPage() {
           <h1 className="text-xl font-bold">Kassa</h1>
         </div>
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="icon" onClick={() => router.push("/auth")}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              localStorage.removeItem("token")
+              router.push("/auth")
+              toast.info("Tizimdan chiqildi")
+            }}
+          >
             <LogOut className="h-5 w-5" />
           </Button>
         </div>

@@ -18,6 +18,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import axios from "axios"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 
 export default function KitchenPage() {
   const router = useRouter()
@@ -46,10 +48,14 @@ export default function KitchenPage() {
         setOrders(res.data)
         setServedOrders(res.data.filter((order) => order.status === "completed"))
         setIsLoadingOrders(false)
+        if (res.data.length === 0) {
+          toast.warn("Hozirda buyurtmalar mavjud emas")
+        }
       })
       .catch((err) => {
         console.error("Buyurtmalarni yuklashda xato:", err)
         setError("Buyurtmalarni yuklashda xato yuz berdi")
+        toast.error("Buyurtmalarni yuklashda xato yuz berdi")
         setIsLoadingOrders(false)
       })
   }, [])
@@ -59,6 +65,7 @@ export default function KitchenPage() {
     const token = localStorage.getItem("token")
     if (!token) {
       router.push("/auth")
+      toast.info("Tizimga kirish uchun autentifikatsiya talab qilinadi")
     }
   }, [router])
 
@@ -96,9 +103,10 @@ export default function KitchenPage() {
           order.id === orderId ? { ...order, status: "preparing" } : order
         )
       )
+      toast.success(`Buyurtma #${orderId} tayyorlash boshlandi!`)
     } catch (err) {
       console.error("Xatolik:", err)
-      alert("Buyurtma holatini o'zgartirishda xatolik yuz berdi")
+      toast.error("Buyurtma holatini o'zgartirishda xatolik yuz berdi")
     }
   }
 
@@ -120,9 +128,10 @@ export default function KitchenPage() {
           order.id === orderId ? { ...order, status: "ready", ready_at: new Date().toISOString() } : order
         )
       )
+      toast.success(`Buyurtma #${orderId} tayyor!`)
     } catch (err) {
       console.error("Xatolik:", err)
-      alert("Buyurtma holatini o'zgartirishda xatolik yuz berdi")
+      toast.error("Buyurtma holatini o'zgartirishda xatolik yuz berdi")
     }
   }
 
@@ -146,11 +155,11 @@ export default function KitchenPage() {
           ...prevServed,
           { ...updatedOrder, status: "completed", completed_at: new Date().toISOString() },
         ])
-        alert(`Buyurtma #${orderId} bajarildi!`)
+        toast.success(`Buyurtma #${orderId} bajarildi!`)
       }
     } catch (err) {
       console.error("Xatolik:", err)
-      alert("Buyurtma holatini o'zgartirishda xatolik yuz berdi")
+      toast.error("Buyurtma holatini o'zgartirishda xatolik yuz berdi")
     }
   }
 
@@ -208,9 +217,11 @@ export default function KitchenPage() {
       })
       setSelectedOrderDetails(response.data)
       setIsDetailsOpen(true)
+      toast.info(`Buyurtma #${orderId} tafsilotlari yuklandi`)
     } catch (err) {
       console.error("Buyurtma tafsilotlarini yuklashda xato:", err)
       setDetailsError("Buyurtma tafsilotlarini yuklashda xato yuz berdi")
+      toast.error("Buyurtma tafsilotlarini yuklashda xato yuz berdi")
     } finally {
       setDetailsLoading(false)
     }
@@ -228,6 +239,7 @@ export default function KitchenPage() {
     localStorage.removeItem("user")
     router.push("/auth")
     setIsLogoutOpen(false)
+    toast.info("Tizimdan chiqildi")
   }
 
   // Buyurtma kartasi komponenti
@@ -303,6 +315,20 @@ export default function KitchenPage() {
 
   return (
     <div className="flex h-screen flex-col">
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+
       {/* Header */}
       <header className="flex h-16 items-center justify-between border-b bg-background px-4">
         <div className="flex items-center space-x-4">

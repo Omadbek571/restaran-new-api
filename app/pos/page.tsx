@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator" // Tuzatilgan qator
+import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -37,9 +37,6 @@ export default function POSPage() {
   const [showTableDialog, setShowTableDialog] = useState(false)
   const [customerInfo, setCustomerInfo] = useState({ name: "", phone: "", address: "" })
   const [showCustomerDialog, setShowCustomerDialog] = useState(false)
-  const [showAddFoodDialog, setShowAddFoodDialog] = useState(false)
-  const [newFood, setNewFood] = useState({ name: "", price: "", category: "", image: null, is_active: true })
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [tables, setTables] = useState([])
   const [isLoadingTables, setIsLoadingTables] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
@@ -123,11 +120,6 @@ export default function POSPage() {
     }
   }, [orderType])
 
-  // Yangi mahsulot qo‘shish funksiyasini ochish
-  function handleAddProduct() {
-    setShowAddFoodDialog(true)
-  }
-
   // Savatga mahsulot qo‘shish
   function addToCart(product) {
     const existingItem = cart.find((item) => item.id === product.id)
@@ -139,7 +131,6 @@ export default function POSPage() {
       )
     } else {
       setCart([...cart, { id: product.id, product, quantity: 1 }])
-      toast.success(`${product.name} savatga qo'shildi!`)
     }
   }
 
@@ -198,63 +189,6 @@ export default function POSPage() {
       .catch((err) => {
         console.error("Buyurtma yuborishda xato:", err)
         toast.error("Buyurtma yuborishda xato yuz berdi. Iltimos, qayta urinib ko‘ring.")
-      })
-  }
-
-  // Yangi mahsulot qo‘shish funksiyasi
-  function handleAddFoodSubmit() {
-    if (!categories.length) {
-      toast.warn("Kategoriyalar yuklanmadi. Iltimos, sahifani qayta yuklang.")
-      return
-    }
-
-    if (!newFood.name || !newFood.price || !newFood.category) {
-      toast.warn("Iltimos, barcha maydonlarni to‘ldiring!")
-      return
-    }
-
-    setIsSubmitting(true)
-    const formData = new FormData()
-    formData.append("name", newFood.name)
-    formData.append("price", newFood.price)
-    formData.append("category_id", newFood.category)
-    formData.append("is_active", newFood.is_active.toString())
-    if (newFood.image) formData.append("image", newFood.image)
-
-    axios
-      .post("https://oshxonacopy.pythonanywhere.com/api/products/", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      })
-      .then((res) => {
-        setShowAddFoodDialog(false)
-        setNewFood({ name: "", price: "", category: "", image: null, is_active: true })
-
-        // Mahsulotlarni qayta yuklash
-        axios
-          .get("https://oshxonacopy.pythonanywhere.com/api/products/", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          })
-          .then((res) => {
-            setProducts(res.data)
-            toast.success("Mahsulot muvaffaqiyatli qo‘shildi!")
-          })
-          .catch((err) => {
-            console.error("Mahsulotlarni qayta yuklashda xato:", err)
-            toast.error("Mahsulotlarni qayta yuklashda xato yuz berdi")
-          })
-
-        setIsSubmitting(false)
-      })
-      .catch((err) => {
-        console.error("Mahsulot qo‘shishda xato:", err)
-        const errorMessage = err.response?.data?.detail || err.response?.data?.category_id?.[0] || "Mahsulot qo‘shishda xato yuz berdi"
-        toast.error(errorMessage)
-        setIsSubmitting(false)
       })
   }
 
@@ -335,9 +269,6 @@ export default function POSPage() {
             <LogOut className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold">SmartResto POS</h1>
-          <Button onClick={handleAddProduct} variant="outline">
-            + Mahsulot qo‘shish
-          </Button>
         </div>
         <div className="flex items-center space-x-4">
           <Tabs
@@ -414,7 +345,6 @@ export default function POSPage() {
 
           {/* Products grid */}
           <ScrollArea className="flex-1 p-4">
-            <h2 className="justify-center mx-auto flex p-2 text-xl font-extrabold text-orange-400">PRODUCTLAR</h2>
             {isLoading ? (
               <div className="flex h-full items-center justify-center">
                 <p>Yuklanmoqda...</p>
@@ -425,7 +355,7 @@ export default function POSPage() {
                 <Button onClick={() => window.location.reload()}>Qayta yuklash</Button>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-6 gap-3">
                 {filteredProducts.length === 0 ? (
                   <div className="col-span-3 flex h-40 items-center justify-center text-muted-foreground">
                     <p>Mahsulotlar topilmadi</p>
@@ -434,7 +364,7 @@ export default function POSPage() {
                   filteredProducts.map((product) => (
                     <Card
                       key={product.id}
-                      className="cursor-pointer overflow-hidden transition-all hover:shadow-md h-[300px]"
+                      className="cursor-pointer overflow-hidden transition-all hover:shadow-md h-[250px]"
                       onClick={() => addToCart(product)}
                     >
                       <CardContent className="p-0 h-full flex flex-col">
@@ -442,7 +372,7 @@ export default function POSPage() {
                           <img
                             src={product.image_url}
                             alt={product.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-[170px] object-cover"
                             style={{ display: "block" }}
                           />
                         </div>
@@ -681,118 +611,6 @@ export default function POSPage() {
               }
             >
               Saqlash
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Food Dialog */}
-      <Dialog open={showAddFoodDialog} onOpenChange={setShowAddFoodDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Yangi ovqat qo‘shish</DialogTitle>
-            <DialogDescription>Yangi ovqat ma‘lumotlarini kiriting</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="food-name" className="text-right">
-                Nomi
-              </Label>
-              <Input
-                id="food-name"
-                value={newFood.name}
-                onChange={(e) => setNewFood({ ...newFood, name: e.target.value })}
-                className="col-span-3"
-                placeholder="Ovqat nomi"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="food-price" className="text-right">
-                Narxi
-              </Label>
-              <Input
-                id="food-price"
-                type="number"
-                value={newFood.price}
-                onChange={(e) => setNewFood({ ...newFood, price: e.target.value })}
-                className="col-span-3"
-                placeholder="25000"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="food-category" className="text-right">
-                Kategoriya
-              </Label>
-              {isLoadingCategories ? (
-                <p className="col-span-3">Kategoriyalar yuklanmoqda...</p>
-              ) : errorCategories ? (
-                <p className="col-span-3 text-destructive">{errorCategories}</p>
-              ) : (
-                <Select
-                  value={newFood.category}
-                  onValueChange={(value) => setNewFood({ ...newFood, category: value })}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Kategoriyani tanlang" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="food-image" className="text-right">
-                Rasm
-              </Label>
-              <Input
-                id="food-image"
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files ? e.target.files[0] : null
-                  if (file) {
-                    setNewFood({ ...newFood, image: file })
-                  }
-                }}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="food-is-active" className="text-right">
-                Faol
-              </Label>
-              <Select
-                value={newFood.is_active.toString()}
-                onValueChange={(value) => setNewFood({ ...newFood, is_active: value === "true" })}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Faol holatni tanlang" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="true">Faol</SelectItem>
-                  <SelectItem value="false">Faol emas</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowAddFoodDialog(false)}
-              disabled={isSubmitting}
-            >
-              Bekor qilish
-            </Button>
-            <Button
-              disabled={!newFood.name || !newFood.price || !newFood.category || isSubmitting || isLoadingCategories || !!errorCategories}
-              onClick={handleAddFoodSubmit}
-            >
-              {isSubmitting ? "Qo‘shilmoqda..." : "Qo‘shish"}
             </Button>
           </DialogFooter>
         </DialogContent>

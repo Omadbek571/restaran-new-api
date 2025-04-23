@@ -105,7 +105,7 @@ const printReceipt = (orderDetails) => {
             font-family: 'Arial', sans-serif;
             margin: 10px;
             font-size: 10pt;
-            width: 72mm;
+            width: 72mm; /* Standard thermal printer width */
             color: #000;
           }
           .receipt { width: 100%; }
@@ -117,8 +117,8 @@ const printReceipt = (orderDetails) => {
           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
           th, td { padding: 3px 1px; text-align: left; vertical-align: top; }
           th { border-bottom: 1px solid #000; font-weight: bold;}
-          td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; }
-          th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: right; }
+          td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; } /* Align quantity, price, total right */
+          th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: right; } /* Align quantity, price, total right */
           .total { border-top: 1px dashed #000; padding-top: 5px; margin-top: 10px; }
           .total p { margin: 4px 0; display: flex; justify-content: space-between; }
           .total p span:first-child { text-align: left; padding-right: 10px; }
@@ -130,13 +130,15 @@ const printReceipt = (orderDetails) => {
       <body>
         <div class="receipt">
           <div class="header">
-            <h1>SmartResto</h1>
+            <h1>SmartResto</h1> {/* You might want to make this dynamic */}
             <p>Chek #${orderDetails.id}</p>
           </div>
           <div class="details">
             <p>Sana: ${new Date(orderDetails.created_at).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
             <p>Mijoz: ${orderDetails.customer_name || 'Noma\'lum'}</p>
             <p>Xodim: ${orderDetails.created_by?.first_name || ''} ${orderDetails.created_by?.last_name || 'N/A'}</p>
+             <p>To'lov usuli: ${orderDetails.payment_method_display || 'N/A'}</p>
+             <p>Buyurtma turi: ${orderDetails.order_type_display || 'N/A'}</p>
           </div>
           <table>
             <thead>
@@ -165,6 +167,7 @@ const printReceipt = (orderDetails) => {
           </div>
           <div class="footer">
             <p>Xaridingiz uchun rahmat!</p>
+            <p>SmartResto</p>
           </div>
         </div>
       </body>
@@ -174,7 +177,11 @@ const printReceipt = (orderDetails) => {
   const printWindow = window.open('', '_blank', 'width=300,height=600')
   if (printWindow) {
     printWindow.document.write(receiptHTML)
-    printWindow.document.close()
+    printWindow.document.close() // Necessary for some browsers.
+    setTimeout(() => {
+      printWindow.print()
+      printWindow.close()
+    }, 250);
     printWindow.focus()
   } else {
     toast.error("Chop etish oynasini ochib bo'lmadi. Brauzer bloklagan bo'lishi mumkin.")
@@ -185,7 +192,7 @@ const printReceipt = (orderDetails) => {
 export default function AdminDashboard() {
   const router = useRouter()
 
-  // State Management
+  // --- State Management ---
   const [token, setToken] = useState(null)
   const [isClient, setIsClient] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -196,7 +203,9 @@ export default function AdminDashboard() {
   const [showAddRoleDialog, setShowAddRoleDialog] = useState(false)
   const [isDeleteRoleConfirmOpen, setIsDeleteRoleConfirmOpen] = useState(false)
   const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false)
-  const [showAddProductDialog, setShowAddProductDialog] = useState(false) // Yangi state
+  const [showAddProductDialog, setShowAddProductDialog] = useState(false)
+
+  // Data States
   const [stats, setStats] = useState({
     todays_sales: { value: 0, change_percent: 0, comparison_period: "N/A" },
     todays_orders: { value: 0, change_percent: 0, comparison_period: "N/A" },
@@ -211,34 +220,44 @@ export default function AdminDashboard() {
   const [fetchedRoles, setFetchedRoles] = useState([])
   const [rolesList, setRolesList] = useState([])
   const [employeeReport, setEmployeeReport] = useState([])
-  const [products, setProducts] = useState([]) // Mahsulotlar ro'yxati uchun
-  const [categories, setCategories] = useState([]) // Kategoriyalar uchun yangi state
-  const [customerReport, setCustomerReport] = useState({
-    regular_customers: { orders_count: 0, totalSales: 0, average_check: 0 },
-    new_customers: { orders_count: 0, totalSales: 0, average_check: 0 },
-    one_time_customers: { orders_count: 0, totalSales: 0, average_check: 0 },
-  })
+  const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
+  const [bestProducts, setBestProducts] = useState([])
+  const [customerReport, setCustomerReport] = useState([]) // Endi massiv
   const [paymentMethods, setPaymentMethods] = useState([])
   const [orderTypes, setOrderTypes] = useState([])
+
+  // Form States
   const [newEmployee, setNewEmployee] = useState({
     username: "", first_name: "", last_name: "", role_id: "", pin_code: "", is_active: true,
   })
   const [newRole, setNewRole] = useState({ name: "" })
   const [newProduct, setNewProduct] = useState({
-    name: "",
-    price: "",
-    description: "",
-    is_active: true,
-    category_id: "", // Kategoriya IDsi
-    cost_price: "", // Tannarx
-    image: null, // Rasm fayli
+    name: "", price: "", description: "", is_active: true, category_id: "", cost_price: "", image: null,
   })
+
+  // Settings State (Yangi qo'shilgan)
+  const [settings, setSettings] = useState({
+    name: "",
+    address: "",
+    phone: "",
+    email: "",
+    description: "",
+    currency_symbol: "",
+    tax_percent: 0,
+    service_fee_percent: 0,
+  })
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
+  const [settingsError, setSettingsError] = useState(null)
+
+  // Other States
   const [roleToDelete, setRoleToDelete] = useState(null)
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null)
   const [isLoadingOrderDetails, setIsLoadingOrderDetails] = useState(false)
   const [orderDetailsError, setOrderDetailsError] = useState(null)
 
-  // Tizimdan chiqish
+  // --- Utility Functions ---
+
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem("token")
@@ -248,7 +267,6 @@ export default function AdminDashboard() {
     router.push("/auth")
   }
 
-  // API xatoliklarini qayta ishlash
   const handleApiError = (error, contextMessage) => {
     console.error(`${contextMessage} xatolik:`, error)
     let errorDetail = `${contextMessage} xatolik yuz berdi.`
@@ -295,7 +313,8 @@ export default function AdminDashboard() {
     }
   }
 
-  // useEffect Hooks
+  // --- useEffect Hooks ---
+
   useEffect(() => {
     setIsClient(true)
     const storedToken = typeof window !== 'undefined' ? localStorage.getItem("token") : null
@@ -394,23 +413,24 @@ export default function AdminDashboard() {
       const headers = getAuthHeader(router)
       if (!headers) return
       axios.get(`https://oshxonacopy.pythonanywhere.com/api/admin/reports/products/`, { headers })
-        .then((res) => { setProducts(res.data ?? []) })
-        .catch((err) => { handleApiError(err, "Mahsulotlar hisobotini yuklashda"); setProducts([]) })
+        .then((res) => { console.log(403, res.data);
+          setBestProducts(res.data)
+        }) // Note: This might conflict with the product list fetch. Decide which state to update or use a separate state.
+        .catch((err) => { handleApiError(err, "Mahsulotlar hisobotini yuklashda"); /* setProducts([]) */ })
     }
   }, [token, isClient, router])
 
-  // Yangi useEffect mahsulotlar ro'yxatini olish uchun
   useEffect(() => {
     if (token && isClient) {
       const headers = getAuthHeader(router)
       if (!headers) return
       axios.get(`https://oshxonacopy.pythonanywhere.com/api/products/`, { headers })
-        .then((res) => { setProducts(res.data ?? []) })
+        .then((res) => {
+          setProducts(res.data ?? []) })
         .catch((err) => { handleApiError(err, "Mahsulotlarni yuklashda"); setProducts([]) })
     }
   }, [token, isClient, router])
 
-  // Kategoriyalarni olish uchun useEffect
   useEffect(() => {
     if (token && isClient) {
       const headers = getAuthHeader(router)
@@ -427,25 +447,11 @@ export default function AdminDashboard() {
       if (!headers) return
       axios.get(`https://oshxonacopy.pythonanywhere.com/api/admin/reports/customers/`, { headers })
         .then((res) => {
-          const defaultReport = {
-            regular_customers: { orders_count: 0, total_sales: 0, average_check: 0 },
-            new_customers: { orders_count: 0, total_sales: 0, average_check: 0 },
-            one_time_customers: { orders_count: 0, total_sales: 0, average_check: 0 },
-          }
-          const receivedReport = res.data || {}
-          setCustomerReport({
-            regular_customers: receivedReport.regular_customers ?? defaultReport.regular_customers,
-            new_customers: receivedReport.new_customers ?? defaultReport.new_customers,
-            one_time_customers: receivedReport.one_time_customers ?? defaultReport.one_time_customers,
-          })
+          setCustomerReport(res.data ?? []) // Agar data null bo'lsa, bo'sh massiv
         })
         .catch((err) => {
           handleApiError(err, "Mijozlar hisobotini yuklashda")
-          setCustomerReport({
-            regular_customers: { orders_count: 0, total_sales: 0, average_check: 0 },
-            new_customers: { orders_count: 0, total_sales: 0, average_check: 0 },
-            one_time_customers: { orders_count: 0, total_sales: 0, average_check: 0 },
-          })
+          setCustomerReport([])
         })
     }
   }, [token, isClient, router])
@@ -495,7 +501,31 @@ export default function AdminDashboard() {
     }
   }, [dateRange, token, isClient, router])
 
-  // Ma'lumotlarni yangilash
+  // Settings uchun GET so'rovi
+  useEffect(() => {
+    if (token && isClient && activeTab === "settings") {
+      const headers = getAuthHeader(router);
+      if (!headers) return;
+
+      setIsLoadingSettings(true);
+      setSettingsError(null);
+
+      axios
+        .get(`https://oshxonacopy.pythonanywhere.com/api/admin/settings/`, { headers })
+        .then((res) => {
+          setSettings(res.data || {});
+          setIsLoadingSettings(false);
+        })
+        .catch((err) => {
+          handleApiError(err, "Sozlamalarni yuklashda");
+          setSettingsError("Sozlamalarni yuklashda xatolik yuz berdi.");
+          setIsLoadingSettings(false);
+        });
+    }
+  }, [token, isClient, activeTab, router]);
+
+  // --- Data Refresh Functions ---
+
   const refreshOrders = () => {
     const headers = getAuthHeader(router)
     if (!headers) return
@@ -543,7 +573,6 @@ export default function AdminDashboard() {
     })
   }
 
-  // Yangi mahsulotlarni yangilash funksiyasi
   const refreshProducts = () => {
     const headers = getAuthHeader(router)
     if (!headers) return
@@ -554,7 +583,8 @@ export default function AdminDashboard() {
     ).catch(err => handleApiError(err, "Mahsulotlarni yangilashda"))
   }
 
-  // Handler funksiyalar
+  // --- Action Handlers ---
+
   const handleCancelOrder = async (orderId) => {
     if (!confirm(`Haqiqatan ham #${orderId} raqamli buyurtmani bekor qilmoqchimisiz? Bu amalni qaytarib bo'lmaydi.`)) {
       return
@@ -633,7 +663,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Yangi mahsulot qo'shish funksiyasi
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.price || !newProduct.category_id) {
       toast.error("Iltimos, mahsulot nomi, narxi va kategoriyasini kiriting.")
@@ -643,6 +672,11 @@ export default function AdminDashboard() {
       toast.error("Narx musbat raqam bo'lishi kerak.")
       return
     }
+    if (newProduct.cost_price && (isNaN(newProduct.cost_price) || parseFloat(newProduct.cost_price) < 0)) {
+        toast.error("Tannarx manfiy bo'lmagan raqam bo'lishi kerak.")
+        return
+    }
+
     const headers = getAuthHeader(router)
     if (!headers) return
 
@@ -674,13 +708,7 @@ export default function AdminDashboard() {
       )
       toast.success(`Mahsulot "${newProduct.name.trim()}" muvaffaqiyatli qo'shildi!`)
       setNewProduct({
-        name: "",
-        price: "",
-        description: "",
-        is_active: true,
-        category_id: "",
-        cost_price: "",
-        image: null,
+        name: "", price: "", description: "", is_active: true, category_id: "", cost_price: "", image: null,
       })
       setShowAddProductDialog(false)
       refreshProducts()
@@ -706,7 +734,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Mahsulot o'chirish funksiyasi
   const handleDeleteProduct = async (product) => {
     if (!confirm(`Haqiqatan ham "${product.name}" (ID: ${product.id}) mahsulotni o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.`)) return
     const headers = getAuthHeader(router)
@@ -735,6 +762,12 @@ export default function AdminDashboard() {
 
   const confirmDeleteRole = async () => {
     if (!roleToDelete || !roleToDelete.id) return
+    if (roleToDelete.employee_count > 0) {
+        toast.error(`"${roleToDelete.name}" rolini o'chirib bo'lmaydi, chunki unga xodimlar biriktirilgan.`);
+        setIsDeleteRoleConfirmOpen(false);
+        setRoleToDelete(null);
+        return;
+    }
     const headers = getAuthHeader(router)
     if (!headers) return
     try {
@@ -750,7 +783,8 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       if (err.response?.status === 400 && err.response?.data?.detail?.toLowerCase().includes("cannot delete role with assigned users")) {
-        toast.error(`"${roleToDelete.name}" rolini o'chirib bo'lmaydi, chunki unga ${roleToDelete.employee_count} ta xodim biriktirilgan.`)
+        const count = roleToDelete.employee_count || 'bir nechta';
+        toast.error(`"${roleToDelete.name}" rolini o'chirib bo'lmaydi, chunki unga ${count} ta xodim biriktirilgan.`)
       } else {
         handleApiError(err, `"${roleToDelete.name}" rolini o'chirishda`)
       }
@@ -799,9 +833,32 @@ export default function AdminDashboard() {
     }, 300)
   }
 
-  // Rendering Logic
-  const displayedOrders = showAllOrders ? orders : recentOrders
+  // Settings uchun yangilash funksiyasi (Yangi qo'shilgan)
+  const handleUpdateSettings = async () => {
+    const headers = getAuthHeader(router);
+    if (!headers) return;
+
+    try {
+      const response = await axios.put(
+        `https://oshxonacopy.pythonanywhere.com/api/admin/settings/`,
+        settings,
+        { headers }
+      );
+      if (response.status === 200) {
+        toast.success("Sozlamalar muvaffaqiyatli yangilandi!");
+      } else {
+        toast.warning(`Sozlamalarni yangilashda kutilmagan javob: ${response.status}`);
+      }
+    } catch (err) {
+      handleApiError(err, "Sozlamalarni yangilashda");
+    }
+  };
+
+  // --- Rendering Logic ---
+
   const safeArray = (data) => (Array.isArray(data) ? data : [])
+
+  const displayedOrders = showAllOrders ? safeArray(orders) : safeArray(recentOrders)
   const validSalesData = safeArray(salesData)
   const validPaymentMethods = safeArray(paymentMethods)
   const validOrderTypes = safeArray(orderTypes)
@@ -813,6 +870,8 @@ export default function AdminDashboard() {
   const validProducts = safeArray(products)
   const validRolesList = safeArray(rolesList)
   const validTopProducts = safeArray(topProducts)
+  const validCategories = safeArray(categories)
+  const validCustomerReport = safeArray(customerReport)
 
   if (!isClient || !token) {
     if (typeof window !== 'undefined' && window.location.pathname === '/auth') {
@@ -832,6 +891,8 @@ export default function AdminDashboard() {
         position="top-right" autoClose={4000} hideProgressBar={false} newestOnTop={false}
         closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored"
       />
+
+      {/* Desktop Sidebar */}
       <div className="hidden w-64 flex-col bg-slate-900 text-white md:flex dark:bg-slate-800">
         <div className="flex h-14 items-center border-b border-slate-700 px-4 dark:border-slate-600">
           <Store className="mr-2 h-6 w-6 text-sky-400" />
@@ -863,6 +924,8 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Sidebar (Overlay) */}
       {showMobileSidebar && (
         <div className="fixed inset-0 z-50 md:hidden" onClick={() => setShowMobileSidebar(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
@@ -900,7 +963,10 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Header */}
         <header className="flex h-14 items-center justify-between border-b bg-white px-4 dark:bg-slate-900 dark:border-slate-700">
           <div className="flex items-center gap-2 md:hidden">
             <Button variant="ghost" size="icon" onClick={() => setShowMobileSidebar(true)}><Menu className="h-6 w-6" /></Button>
@@ -922,29 +988,141 @@ export default function AdminDashboard() {
             </DropdownMenu>
           </div>
         </header>
+
+        {/* Main Content Body (Scrollable) */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 bg-slate-100 dark:bg-slate-950">
+          {/* Dashboard Tab */}
           {activeTab === "dashboard" && (
-            <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Bugungi savdo</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{(stats.todays_sales.value ?? 0).toLocaleString()} so'm</div><p className="text-xs text-muted-foreground">{stats.todays_sales.change_percent >= 0 ? '+' : ''}{stats.todays_sales.change_percent?.toFixed(1) ?? 0}% vs {stats.todays_sales.comparison_period || "kecha"}</p></CardContent></Card>
-              <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Bugungi Buyurtmalar</CardTitle><ShoppingCart className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">+{stats.todays_orders.value ?? 0}</div><p className="text-xs text-muted-foreground">{stats.todays_orders.change_percent >= 0 ? '+' : ''}{stats.todays_orders.change_percent?.toFixed(1) ?? 0}% vs {stats.todays_orders.comparison_period || "kecha"}</p></CardContent></Card>
-              <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Faol xodimlar</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{stats.active_employees.value ?? 0}</div><p className="text-xs text-muted-foreground">{(stats.active_employees.change_absolute ?? 0) >= 0 ? '+' : ''}{stats.active_employees.change_absolute ?? 0} vs {stats.active_employees.comparison_period || "kecha"}</p></CardContent></Card>
-              <Card className="col-span-full md:col-span-2">
-                <CardHeader><CardTitle>Savdo dinamikasi (Oxirgi 7 kun)</CardTitle></CardHeader>
-                <CardContent className="pl-2">
-                  {validSalesData.length > 0 && isClient ? (
-                    <div className="h-[250px] w-full">
-                      <Chart options={{ chart: { id: "weekly-sales-chart", toolbar: { show: false }, background: 'transparent' }, theme: { mode: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' }, xaxis: { categories: validSalesData.map((day) => new Date(day.date).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })), labels: { rotate: -45, style: { fontSize: "10px", colors: '#9ca3af' }, offsetY: 5 }, axisBorder: { show: false }, axisTicks: { show: false } }, yaxis: { labels: { formatter: (value) => `${(value / 1000).toFixed(0)}k`, style: { colors: '#9ca3af' } } }, dataLabels: { enabled: false }, stroke: { curve: "smooth", width: 2 }, colors: ["#3b82f6"], grid: { borderColor: "hsl(var(--border))", strokeDashArray: 4, row: { colors: ['transparent', 'transparent'], opacity: 0.5 } }, tooltip: { theme: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light', y: { formatter: (value) => `${value.toLocaleString()} so'm` } }, fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.3, stops: [0, 90, 100] } }, }} series={[{ name: "Savdo", data: validSalesData.map((day) => day.sales) }]} type="area" height={250}/>
-                    </div>) : (<div className="flex h-[250px] items-center justify-center text-muted-foreground">Ma'lumotlar yuklanmoqda...</div>)}
+            <div className="grid gap-4 md:gap-6 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Bugungi savdo</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{(stats.todays_sales.value ?? 0).toLocaleString()} so'm</div>
+                    <p className={`text-xs ${stats.todays_sales.change_percent >= 0 ? 'text-green-600' : 'text-red-600'} dark:${stats.todays_sales.change_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {stats.todays_sales.change_percent >= 0 ? '+' : ''}{stats.todays_sales.change_percent?.toFixed(1) ?? 0}% vs {stats.todays_sales.comparison_period || "kecha"}
+                    </p>
                 </CardContent>
               </Card>
-              <Card className="col-span-full md:col-span-2">
-                <CardHeader className="flex flex-row items-center justify-between pb-4"><CardTitle className="text-base font-semibold">Eng ko'p sotilganlar</CardTitle><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="gap-1">{dateRange === "daily" ? "Bugun" : dateRange === "weekly" ? "Haftalik" : "Oylik"}<ChevronDown className="h-4 w-4 opacity-50" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setDateRange("daily")}>Bugun</DropdownMenuItem><DropdownMenuItem onClick={() => setDateRange("weekly")}>Haftalik</DropdownMenuItem><DropdownMenuItem onClick={() => setDateRange("monthly")}>Oylik</DropdownMenuItem></DropdownMenuContent></DropdownMenu></CardHeader>
-                <CardContent className="p-0"><ScrollArea className="h-[250px]"><Table><TableHeader><TableRow><TableHead>Mahsulot</TableHead><TableHead className="text-right">Miqdor</TableHead><TableHead className="text-right">Savdo</TableHead></TableRow></TableHeader><TableBody>{validTopProducts.length > 0 ? validTopProducts.map((product, index) => (<TableRow key={product.product_id || index}><TableCell className="font-medium">{product.product_name || "Noma'lum"}</TableCell><TableCell className="text-right">{product.quantity ?? 0}</TableCell><TableCell className="text-right">{(product.sales ?? 0).toLocaleString()} so'm</TableCell></TableRow>)) : (<TableRow><TableCell colSpan={3} className="h-24 text-center text-muted-foreground">Bu davr uchun ma'lumot yo'q</TableCell></TableRow>)}</TableBody></Table></ScrollArea></CardContent>
+              <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Bugungi Buyurtmalar</CardTitle><ShoppingCart className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                  <CardContent>
+                      <div className="text-2xl font-bold">+{stats.todays_orders.value ?? 0}</div>
+                      <p className={`text-xs ${stats.todays_orders.change_percent >= 0 ? 'text-green-600' : 'text-red-600'} dark:${stats.todays_orders.change_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {stats.todays_orders.change_percent >= 0 ? '+' : ''}{stats.todays_orders.change_percent?.toFixed(1) ?? 0}% vs {stats.todays_orders.comparison_period || "kecha"}
+                      </p>
+                  </CardContent>
               </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">O'rtacha chek</CardTitle><CreditCard className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{(stats.average_check.value ?? 0).toLocaleString()} so'm</div>
+                    <p className={`text-xs ${stats.average_check.change_percent >= 0 ? 'text-green-600' : 'text-red-600'} dark:${stats.average_check.change_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {stats.average_check.change_percent >= 0 ? '+' : ''}{stats.average_check.change_percent?.toFixed(1) ?? 0}% vs {stats.average_check.comparison_period || "kecha"}
+                    </p>
+                  </CardContent>
+                </Card>
+              <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Faol xodimlar</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
+                  <CardContent>
+                      <div className="text-2xl font-bold">{stats.active_employees.value ?? 0}</div>
+                      <p className={`text-xs ${stats.active_employees.change_absolute >= 0 ? 'text-green-600' : 'text-red-600'} dark:${stats.active_employees.change_absolute >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {(stats.active_employees.change_absolute ?? 0) >= 0 ? '+' : ''}{stats.active_employees.change_absolute ?? 0} vs {stats.active_employees.comparison_period || "kecha"}
+                      </p>
+                  </CardContent>
+              </Card>
+
+              <Card className="col-span-full lg:col-span-2">
+                <CardHeader><CardTitle>Savdo dinamikasi (Oxirgi 7 kun)</CardTitle></CardHeader>
+                <CardContent className="pl-2 pr-4">
+                  {isClient && validSalesData.length > 0 ? (
+                    <div className="h-[250px] w-full">
+                      <Chart
+                        options={{
+                          chart: { id: "weekly-sales-chart", toolbar: { show: false }, background: 'transparent' },
+                          theme: { mode: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
+                          xaxis: {
+                            categories: validSalesData.map((day) => new Date(day.date).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })),
+                            labels: { rotate: -45, style: { fontSize: "10px", colors: '#9ca3af' }, offsetY: 5 },
+                            axisBorder: { show: false }, axisTicks: { show: false }
+                          },
+                          yaxis: { labels: { formatter: (value) => `${(value / 1000).toFixed(0)}k`, style: { colors: '#9ca3af' } } },
+                          dataLabels: { enabled: false },
+                          stroke: { curve: "smooth", width: 2 },
+                          colors: ["#3b82f6"],
+                          grid: { borderColor: "hsl(var(--border))", strokeDashArray: 4, row: { colors: ['transparent', 'transparent'], opacity: 0.5 } },
+                          tooltip: {
+                             theme: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+                             y: { formatter: (value) => `${value.toLocaleString()} so'm` }
+                          },
+                          fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.3, stops: [0, 90, 100] } }
+                        }}
+                        series={[{ name: "Savdo", data: validSalesData.map((day) => day.sales) }]}
+                        type="area"
+                        height={250}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-[250px] items-center justify-center text-muted-foreground">
+                      {isClient ? "Ma'lumotlar topilmadi." : "Ma'lumotlar yuklanmoqda..."}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-full lg:col-span-2">
+                <CardHeader className="flex flex-row items-center justify-between pb-4">
+                    <CardTitle className="text-base font-semibold">Eng ko'p sotilganlar</CardTitle>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-1">
+                                {dateRange === "daily" ? "Bugun" : dateRange === "weekly" ? "Haftalik" : "Oylik"}
+                                <ChevronDown className="h-4 w-4 opacity-50" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setDateRange("daily")}>Bugun</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDateRange("weekly")}>Haftalik</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDateRange("monthly")}>Oylik</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[250px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                            <TableHead>Mahsulot</TableHead>
+                            <TableHead className="text-right">Miqdor</TableHead>
+                            <TableHead className="text-right">Savdo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {validTopProducts.length > 0 ? validTopProducts.map((product, index) => (
+                          <TableRow key={product.product_id || index}>
+                            <TableCell className="font-medium">{product.product_name || "Noma'lum"}</TableCell>
+                            <TableCell className="text-right">{product.quantity ?? 0}</TableCell>
+                            <TableCell className="text-right">{(product.sales ?? 0).toLocaleString()} so'm</TableCell>
+                          </TableRow>
+                        )) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">Bu davr uchun ma'lumot yo'q</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
               <Card className="col-span-full">
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <div><CardTitle>So'nggi buyurtmalar</CardTitle><CardDescription>Oxirgi {validDisplayedOrders.length} ta buyurtma.</CardDescription></div>
-                  <Button variant="ghost" size="sm" onClick={refreshOrders}><Paperclip className="mr-2 h-4 w-4"/>Yangilash</Button>
+                  <div>
+                      <CardTitle>So'nggi buyurtmalar</CardTitle>
+                      <CardDescription>Oxirgi {validDisplayedOrders.length} ta buyurtma.</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={refreshOrders}>
+                      <Paperclip className="mr-2 h-4 w-4"/>Yangilash
+                  </Button>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -960,1031 +1138,1062 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {validDisplayedOrders.length > 0 ? validDisplayedOrders.map((order) => (
-  <TableRow key={order.id}>
-    <TableCell className="font-medium">#{order.id}</TableCell>
-    <TableCell>{order.customer_name || "Noma'lum"}</TableCell>
-    <TableCell className="hidden sm:table-cell">{order.order_type_display || 'N/A'}</TableCell>
-    <TableCell className="text-right">{parseFloat(order.final_price || 0).toLocaleString()} so'm</TableCell>
-    <TableCell className="hidden md:table-cell">
-      <Badge variant={order.status === 'completed' ? 'success' : order.status === 'cancelled' ? 'destructive' : order.status === 'pending' ? 'warning' : order.status === 'ready' ? 'info' : 'outline'}>
-        {order.status_display || 'N/A'}
-      </Badge>
-    </TableCell>
-    <TableCell className="hidden lg:table-cell text-right">
-      {new Date(order.created_at).toLocaleString('uz-UZ', { dateStyle: 'short', timeStyle: 'short' })}
-    </TableCell>
-    <TableCell className="text-right">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <ChevronDown className="h-4 w-4" />
-            <span className="sr-only">Amallar</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => handleShowOrderDetails(order.id)}>Batafsil</DropdownMenuItem>
-          <DropdownMenuItem onClick={async () => {
-            await handleShowOrderDetails(order.id);
-            setTimeout(() => {
-              if (selectedOrderDetails) {
-                printReceipt(selectedOrderDetails);
-              } else {
-                toast.error("Chekni chop etish uchun ma'lumotlar topilmadi!");
-              }
-            }, 500);
-          }}>
-            Chek chop etish
-          </DropdownMenuItem>
-          {order.status !== 'cancelled' && order.status !== 'completed' && (
-            <DropdownMenuItem onClick={() => handleCancelOrder(order.id)} className="text-red-600">
-              Bekor qilish
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </TableCell>
-  </TableRow>
-)) : (
-  <TableRow>
-    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-      Buyurtmalar topilmadi.
-    </TableCell>
-  </TableRow>
-)}
-</TableBody>
-</Table>
-</CardContent>
-<CardFooter className="flex justify-center pt-4">
-  {!showAllOrders && validOrders.length > 5 && (
-    <Button variant="link" onClick={() => setShowAllOrders(true)}>
-      Barchasini ko'rish
-    </Button>
-  )}
-  {showAllOrders && (
-    <Button variant="link" onClick={() => setShowAllOrders(false)}>
-      Kamroq ko'rish
-    </Button>
-  )}
-</CardFooter>
-</Card>
-</div>
-)}
-{activeTab === "orders" && (
-<div className="space-y-6">
-  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-    <h2 className="text-2xl font-bold tracking-tight">Buyurtmalar</h2>
-    <Button variant="ghost" onClick={refreshOrders}>
-      <Paperclip className="mr-2 h-4 w-4" /> Yangilash
-    </Button>
-  </div>
-  <Card>
-    <CardHeader>
-      <CardTitle>Buyurtmalar ro'yxati</CardTitle>
-      <CardDescription>Barcha buyurtmalar va ularning holati.</CardDescription>
-    </CardHeader>
-    <CardContent className="p-0">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[80px]">ID</TableHead>
-            <TableHead>Mijoz</TableHead>
-            <TableHead className="hidden sm:table-cell">Turi</TableHead>
-            <TableHead className="text-right">Jami</TableHead>
-            <TableHead className="hidden md:table-cell">Holat</TableHead>
-            <TableHead className="hidden lg:table-cell text-right">Sana</TableHead>
-            <TableHead className="text-right w-[100px]">Amallar</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {validOrders.length > 0 ? validOrders.map((order) => (
-            <TableRow key={order.id}>
-              <TableCell className="font-medium">#{order.id}</TableCell>
-              <TableCell>{order.customer_name || "Noma'lum"}</TableCell>
-              <TableCell className="hidden sm:table-cell">{order.order_type_display || 'N/A'}</TableCell>
-              <TableCell className="text-right">{parseFloat(order.final_price || 0).toLocaleString()} so'm</TableCell>
-              <TableCell className="hidden md:table-cell">
-                <Badge variant={order.status === 'completed' ? 'success' : order.status === 'cancelled' ? 'destructive' : order.status === 'pending' ? 'warning' : order.status === 'ready' ? 'info' : 'outline'}>
-                  {order.status_display || 'N/A'}
-                </Badge>
-              </TableCell>
-              <TableCell className="hidden lg:table-cell text-right">
-                {new Date(order.created_at).toLocaleString('uz-UZ', { dateStyle: 'short', timeStyle: 'short' })}
-              </TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <ChevronDown className="h-4 w-4" />
-                      <span className="sr-only">Amallar</span>
+                      {validDisplayedOrders.length > 0 ? validDisplayedOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-medium">#{order.id}</TableCell>
+                          <TableCell>{order.customer_name || "Noma'lum"}</TableCell>
+                          <TableCell className="hidden sm:table-cell">{order.order_type_display || 'N/A'}</TableCell>
+                          <TableCell className="text-right">{parseFloat(order.final_price || 0).toLocaleString()} so'm</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Badge variant={
+                                order.status === 'completed' ? 'success' :
+                                order.status === 'cancelled' ? 'destructive' :
+                                order.status === 'pending' ? 'warning' :
+                                order.status === 'ready' ? 'info' :
+                                'outline'
+                            }>
+                              {order.status_display || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-right">
+                            {new Date(order.created_at).toLocaleString('uz-UZ', { dateStyle: 'short', timeStyle: 'short' })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <ChevronDown className="h-4 w-4" />
+                                  <span className="sr-only">Amallar</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleShowOrderDetails(order.id)}>Batafsil</DropdownMenuItem>
+                                <DropdownMenuItem onClick={async () => {
+                                    await handleShowOrderDetails(order.id);
+                                    setTimeout(() => {
+                                        if (selectedOrderDetails && selectedOrderDetails.id === order.id) {
+                                            printReceipt(selectedOrderDetails);
+                                        } else {
+                                            toast.error("Chekni chop etish uchun ma'lumotlar yuklanmadi. Qaytadan urinib ko'ring.");
+                                        }
+                                    }, 300);
+                                }}>
+                                  Chek chop etish
+                                </DropdownMenuItem>
+                                {(order.status === 'pending' || order.status === 'processing' || order.status === 'ready') && (
+                                  <DropdownMenuItem onClick={() => handleCancelOrder(order.id)} className="text-red-600 focus:text-red-700 focus:bg-red-100 dark:focus:bg-red-900/50 dark:focus:text-red-400">
+                                    Bekor qilish
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                            Buyurtmalar topilmadi.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+                <CardFooter className="flex justify-center pt-4">
+                  {!showAllOrders && validOrders.length > 5 && (
+                    <Button variant="link" onClick={() => setShowAllOrders(true)}>
+                      Barchasini ko'rish ({validOrders.length})
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleShowOrderDetails(order.id)}>Batafsil</DropdownMenuItem>
-                    <DropdownMenuItem onClick={async () => {
-                      await handleShowOrderDetails(order.id);
-                      setTimeout(() => {
-                        if (selectedOrderDetails) {
-                          printReceipt(selectedOrderDetails);
-                        } else {
-                          toast.error("Chekni chop etish uchun ma'lumotlar topilmadi!");
-                        }
-                      }, 500);
-                    }}>
-                      Chek chop etish
-                    </DropdownMenuItem>
-                    {order.status !== 'cancelled' && order.status !== 'completed' && (
-                      <DropdownMenuItem onClick={() => handleCancelOrder(order.id)} className="text-red-600">
-                        Bekor qilish
-                      </DropdownMenuItem>
+                  )}
+                  {showAllOrders && (
+                    <Button variant="link" onClick={() => setShowAllOrders(false)}>
+                      Kamroq ko'rish
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            </div>
+          )}
+
+          {/* Orders Tab */}
+          {activeTab === "orders" && (
+            <div className="space-y-6">
+              <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                <h2 className="text-2xl font-bold tracking-tight">Buyurtmalar</h2>
+                <Button variant="ghost" onClick={refreshOrders}>
+                  <Paperclip className="mr-2 h-4 w-4" /> Yangilash
+                </Button>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Buyurtmalar ro'yxati</CardTitle>
+                  <CardDescription>Barcha buyurtmalar va ularning holati.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[80px]">ID</TableHead>
+                        <TableHead>Mijoz</TableHead>
+                        <TableHead className="hidden sm:table-cell">Turi</TableHead>
+                        <TableHead className="text-right">Jami</TableHead>
+                        <TableHead className="hidden md:table-cell">Holat</TableHead>
+                        <TableHead className="hidden lg:table-cell text-right">Sana</TableHead>
+                        <TableHead className="text-right w-[100px]">Amallar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {validOrders.length > 0 ? validOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-medium">#{order.id}</TableCell>
+                          <TableCell>{order.customer_name || "Noma'lum"}</TableCell>
+                          <TableCell className="hidden sm:table-cell">{order.order_type_display || 'N/A'}</TableCell>
+                          <TableCell className="text-right">{parseFloat(order.final_price || 0).toLocaleString()} so'm</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                             <Badge variant={
+                                order.status === 'completed' ? 'success' :
+                                order.status === 'cancelled' ? 'destructive' :
+                                order.status === 'pending' ? 'warning' :
+                                order.status === 'ready' ? 'info' :
+                                'outline'
+                            }>
+                              {order.status_display || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-right">
+                            {new Date(order.created_at).toLocaleString('uz-UZ', { dateStyle: 'short', timeStyle: 'short' })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <ChevronDown className="h-4 w-4" />
+                                  <span className="sr-only">Amallar</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleShowOrderDetails(order.id)}>Batafsil</DropdownMenuItem>
+                                <DropdownMenuItem onClick={async () => {
+                                    await handleShowOrderDetails(order.id);
+                                    setTimeout(() => {
+                                      if (selectedOrderDetails && selectedOrderDetails.id === order.id) {
+                                        printReceipt(selectedOrderDetails);
+                                      } else {
+                                        toast.error("Chekni chop etish uchun ma'lumotlar yuklanmadi. Qaytadan urinib ko'ring.");
+                                      }
+                                    }, 300);
+                                }}>
+                                  Chek chop etish
+                                </DropdownMenuItem>
+                                {(order.status === 'pending' || order.status === 'processing' || order.status === 'ready') && (
+                                  <DropdownMenuItem onClick={() => handleCancelOrder(order.id)} className="text-red-600 focus:text-red-700 focus:bg-red-100 dark:focus:bg-red-900/50 dark:focus:text-red-400">
+                                    Bekor qilish
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                            Buyurtmalar topilmadi.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Products Tab */}
+          {activeTab === "products" && (
+            <div className="space-y-6">
+              <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                <h2 className="text-2xl font-bold tracking-tight">Mahsulotlar</h2>
+                <Button onClick={() => setShowAddProductDialog(true)}>
+                  <Plus className="mr-2 h-4 w-4" /> Yangi mahsulot qo'shish
+                </Button>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mahsulotlar ro'yxati</CardTitle>
+                  <CardDescription>Barcha mavjud mahsulotlar va ularning narxlari.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Mahsulot nomi</TableHead>
+                        <TableHead className="text-right">Narx</TableHead>
+                        <TableHead className="hidden sm:table-cell">Kategoriya</TableHead>
+                        <TableHead className="hidden md:table-cell">Tannarx</TableHead>
+                        <TableHead className="text-right">Holat</TableHead>
+                        <TableHead className="text-right">Amallar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {validProducts.length > 0 ? validProducts.map((product) => (
+                        <TableRow key={product.id}>
+                          <TableCell className="font-medium flex items-center gap-2">
+                            <img
+                              src={product.image || "/placeholder-product.jpg"}
+                              alt={product.name || "Mahsulot"}
+                              className="w-8 h-8 rounded-sm object-cover"
+                            />
+                            <span>{product.name || "Noma'lum"}</span>
+                          </TableCell>
+                          <TableCell className="text-right">{(product.price || 0).toLocaleString()} so'm</TableCell>
+                          <TableCell className="hidden sm:table-cell">{product.category?.name || "N/A"}</TableCell>
+                          <TableCell className="hidden md:table-cell text-right">{(product.cost_price || 0).toLocaleString()} so'm</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={product.is_active ? "success" : "destructive"}>
+                              {product.is_active ? "Faol" : "Faol emas"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <ChevronDown className="h-4 w-4" />
+                                  <span className="sr-only">Amallar</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem disabled>Tahrirlash</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteProduct(product)} className="text-red-600 focus:text-red-700 focus:bg-red-100 dark:focus:bg-red-900/50 dark:focus:text-red-400">
+                                  O'chirish
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                            Mahsulotlar topilmadi.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Employees Tab */}
+          {activeTab === "employees" && (
+            <div className="space-y-6">
+              <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                <h2 className="text-2xl font-bold tracking-tight">Xodimlar</h2>
+                <Button onClick={() => setShowAddEmployeeDialog(true)}>
+                  <Plus className="mr-2 h-4 w-4" /> Yangi xodim qo'shish
+                </Button>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Xodimlar ro'yxati</CardTitle>
+                  <CardDescription>Barcha xodimlar va ularning rollari.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ism</TableHead>
+                        <TableHead className="hidden sm:table-cell">Username</TableHead>
+                        <TableHead className="hidden md:table-cell">Rol</TableHead>
+                        <TableHead className="text-right">Holat</TableHead>
+                        <TableHead className="text-right">Amallar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {validXodim.length > 0 ? validXodim.map((employee) => (
+                        <TableRow key={employee.id}>
+                          <TableCell className="font-medium">{employee.first_name} {employee.last_name}</TableCell>
+                          <TableCell className="hidden sm:table-cell">{employee.username || "N/A"}</TableCell>
+                          <TableCell className="hidden md:table-cell">{employee.role?.name || "N/A"}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={employee.is_active ? "success" : "destructive"}>
+                              {employee.is_active ? "Faol" : "Faol emas"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <ChevronDown className="h-4 w-4" />
+                                  <span className="sr-only">Amallar</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem disabled>Tahrirlash</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteEmployee(employee)} className="text-red-600 focus:text-red-700 focus:bg-red-100 dark:focus:bg-red-900/50 dark:focus:text-red-400">
+                                  O'chirish
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                            Xodimlar topilmadi.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Roles Tab */}
+          {activeTab === "roles" && (
+            <div className="space-y-6">
+              <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                <h2 className="text-2xl font-bold tracking-tight">Rollar</h2>
+                <Button onClick={() => setShowAddRoleDialog(true)}>
+                  <Plus className="mr-2 h-4 w-4" /> Yangi rol qo'shish
+                </Button>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Rollar ro'yxati</CardTitle>
+                  <CardDescription>Tizimdagi barcha rollar va ularga biriktirilgan xodimlar soni.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Rol nomi</TableHead>
+                        <TableHead className="text-right">Xodimlar soni</TableHead>
+                        <TableHead className="text-right">Amallar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {validRolesList.length > 0 ? validRolesList.map((role) => (
+                        <TableRow key={role.id}>
+                          <TableCell className="font-medium">{role.name || "Noma'lum"}</TableCell>
+                          <TableCell className="text-right">{role.employee_count ?? role.count ?? 0}</TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <ChevronDown className="h-4 w-4" />
+                                  <span className="sr-only">Amallar</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem disabled>Tahrirlash</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteRole(role)} className="text-red-600 focus:text-red-700 focus:bg-red-100 dark:focus:bg-red-900/50 dark:focus:text-red-400">
+                                  O'chirish
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                            Rollar topilmadi.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Reports Tab */}
+          {activeTab === "reports" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold tracking-tight">Hisobotlar</h2>
+              <Tabs defaultValue="employees" className="space-y-4">
+                <TabsList>
+                  <TabsTrigger value="employees">Xodimlar bo'yicha</TabsTrigger>
+                  <TabsTrigger value="products">Mahsulotlar bo'yicha</TabsTrigger>
+                  <TabsTrigger value="customers">Mijozlar bo'yicha</TabsTrigger>
+                  <TabsTrigger value="charts">Diagrammalar</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="employees" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Xodimlar bo'yicha hisobot</CardTitle>
+                      <CardDescription>Xodimlarning faoliyati va savdo ko'rsatkichlari.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Xodim</TableHead>
+                            <TableHead className="text-right">Buyurtmalar soni</TableHead>
+                            <TableHead className="text-right">Umumiy savdo</TableHead>
+                            <TableHead className="text-right hidden md:table-cell">O'rtacha chek</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {validEmployeeReport.length > 0 ? validEmployeeReport.map((report, index) => (
+                            <TableRow key={report.employee_id || index}>
+                              <TableCell className="font-medium">{report.employee_name || "Noma'lum"}</TableCell>
+                              <TableCell className="text-right">{report.order_count ?? 0}</TableCell>
+                              <TableCell className="text-right">{(report.total_sales ?? 0).toLocaleString()} so'm</TableCell>
+                              <TableCell className="text-right hidden md:table-cell">{(report.average_check ?? 0).toLocaleString()} so'm</TableCell>
+                            </TableRow>
+                          )) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                Hisobot ma'lumotlari topilmadi.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="products" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Mahsulotlar bo'yicha hisobot</CardTitle>
+                      <CardDescription>Mahsulotlarning sotilish statistikasi.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Mahsulot</TableHead>
+                            <TableHead className="text-right">Sotilgan miqdor</TableHead>
+                            <TableHead className="text-right">Umumiy savdo</TableHead>
+                            <TableHead className="text-right hidden md:table-cell">O'rtacha narx</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {bestProducts.length > 0 ? bestProducts.map((product, index) => (
+                            <TableRow key={product.product_id || index}>
+                              <TableCell className="font-medium">{product.product_name || "Noma'lum"}</TableCell>
+                              <TableCell className="text-right">{product.quantity_sold ?? 0}</TableCell>
+                              <TableCell className="text-right">{(product.total_sales ?? 0).toLocaleString()} so'm</TableCell>
+                              <TableCell className="text-right hidden md:table-cell">{(product.average_price ?? 0).toLocaleString()} so'm</TableCell>
+                            </TableRow>
+                          )) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                Hisobot ma'lumotlari topilmadi.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="customers" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Mijozlar bo'yicha hisobot</CardTitle>
+                      <CardDescription>Mijozlarning buyurtmalari va xarid statistikasi.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Mijoz</TableHead>
+                            <TableHead className="text-right">Buyurtmalar soni</TableHead>
+                            <TableHead className="text-right">Umumiy xarid</TableHead>
+                            <TableHead className="text-right hidden md:table-cell">O'rtacha chek</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {validCustomerReport.length > 0 ? validCustomerReport.map((report, index) => (
+                            <TableRow key={report.customer_id || index}>
+                              <TableCell className="font-medium">{report.customer_name || "Noma'lum"}</TableCell>
+                              <TableCell className="text-right">{report.order_count ?? 0}</TableCell>
+                              <TableCell className="text-right">{(report.total_spent ?? 0).toLocaleString()} so'm</TableCell>
+                              <TableCell className="text-right hidden md:table-cell">{(report.average_check ?? 0).toLocaleString()} so'm</TableCell>
+                            </TableRow>
+                          )) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                Mijozlar bo'yicha hisobot ma'lumotlari topilmadi.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="charts" className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>To'lov usullari bo'yicha</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {isClient && validPaymentMethods.length > 0 ? (
+                          <div className="h-[300px] w-full">
+                            <Chart
+                              options={{
+                                chart: { type: 'pie', background: 'transparent' },
+                                theme: { mode: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
+                                labels: validPaymentMethods.map(method => method.payment_method_display || 'Noma\'lum'),
+                                colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                                legend: { position: 'bottom', labels: { colors: '#9ca3af' } },
+                                tooltip: {
+                                  theme: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+                                  y: { formatter: (value) => `${value} ta` }
+                                },
+                                dataLabels: { enabled: true, formatter: (val) => `${val.toFixed(1)}%` }
+                              }}
+                              series={validPaymentMethods.map(method => method.order_count || 0)}
+                              type="pie"
+                              height={300}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                            Ma'lumotlar topilmadi.
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Buyurtma turlari bo'yicha</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {isClient && validOrderTypes.length > 0 ? (
+                          <div className="h-[300px] w-full">
+                            <Chart
+                              options={{
+                                chart: { type: 'donut', background: 'transparent' },
+                                theme: { mode: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
+                                labels: validOrderTypes.map(type => type.order_type_display || 'Noma\'lum'),
+                                colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                                legend: { position: 'bottom', labels: { colors: '#9ca3af' } },
+                                tooltip: {
+                                  theme: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+                                  y: { formatter: (value) => `${value} ta` }
+                                },
+                                dataLabels: { enabled: true, formatter: (val) => `${val.toFixed(1)}%` }
+                              }}
+                              series={validOrderTypes.map(type => type.order_count || 0)}
+                              type="donut"
+                              height={300}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                            Ma'lumotlar topilmadi.
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {/* Settings Tab (Swagger API'ga moslashtirilgan) */}
+          {activeTab === "settings" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold tracking-tight">Sozlamalar</h2>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Restoran sozlamalari</CardTitle>
+                  <CardDescription>Restoran ma'lumotlarini bu yerda o'zgartirishingiz mumkin.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingSettings ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+                    </div>
+                  ) : settingsError ? (
+                    <div className="py-10 text-center text-red-600 dark:text-red-400">
+                      {settingsError}
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Restoran nomi*</Label>
+                        <Input
+                          id="name"
+                          value={settings.name || ""}
+                          onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+                          placeholder="Restoran nomi"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="address">Manzil</Label>
+                        <Input
+                          id="address"
+                          value={settings.address || ""}
+                          onChange={(e) => setSettings({ ...settings, address: e.target.value })}
+                          placeholder="Manzil"
+                          maxLength={100}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Telefon raqami</Label>
+                        <Input
+                          id="phone"
+                          value={settings.phone || ""}
+                          onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
+                          placeholder="Telefon raqami"
+                          maxLength={20}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={settings.email || ""}
+                          onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                          placeholder="Email"
+                          maxLength={254}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Tavsif</Label>
+                        <Input
+                          id="description"
+                          value={settings.description || ""}
+                          onChange={(e) => setSettings({ ...settings, description: e.target.value })}
+                          placeholder="Tavsif"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="currency_symbol">Valyuta belgisi</Label>
+                        <Input
+                          id="currency_symbol"
+                          value={settings.currency_symbol || ""}
+                          onChange={(e) => setSettings({ ...settings, currency_symbol: e.target.value })}
+                          placeholder="Valyuta belgisi"
+                          maxLength={10}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tax_percent">Soliq stavkasi (%)</Label>
+                        <Input
+                          id="tax_percent"
+                          type="number"
+                          value={settings.tax_percent || 0}
+                          onChange={(e) => setSettings({ ...settings, tax_percent: parseFloat(e.target.value) || 0 })}
+                          placeholder="Soliq stavkasi (%)"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="service_fee_percent">Xizmat haqi (%)</Label>
+                        <Input
+                          id="service_fee_percent"
+                          type="number"
+                          value={settings.service_fee_percent || 0}
+                          onChange={(e) => setSettings({ ...settings, service_fee_percent: parseFloat(e.target.value) || 0 })}
+                          placeholder="Xizmat haqi (%)"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button onClick={handleUpdateSettings}>Saqlash</Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Add Employee Dialog */}
+      <Dialog open={showAddEmployeeDialog} onOpenChange={setShowAddEmployeeDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Yangi xodim qo'shish</DialogTitle>
+            <DialogDescription>Xodim ma'lumotlarini kiriting.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="username" className="text-right">Username*</Label>
+              <Input
+                id="username"
+                value={newEmployee.username}
+                onChange={(e) => setNewEmployee({ ...newEmployee, username: e.target.value })}
+                className="col-span-3"
+                placeholder="Username"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="first_name" className="text-right">Ism*</Label>
+              <Input
+                id="first_name"
+                value={newEmployee.first_name}
+                onChange={(e) => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
+                className="col-span-3"
+                placeholder="Ism"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="last_name" className="text-right">Familiya*</Label>
+              <Input
+                id="last_name"
+                value={newEmployee.last_name}
+                onChange={(e) => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
+                className="col-span-3"
+                placeholder="Familiya"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role_id" className="text-right">Rol*</Label>
+              <Select
+                value={newEmployee.role_id}
+                onValueChange={(value) => setNewEmployee({ ...newEmployee, role_id: value })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Rolni tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {validFetchedRoles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.name || "Noma'lum"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="pin_code" className="text-right">PIN-kod*</Label>
+              <Input
+                id="pin_code"
+                type="text"
+                value={newEmployee.pin_code}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setNewEmployee({ ...newEmployee, pin_code: value });
+                }}
+                className="col-span-3"
+                placeholder="4 raqamli PIN-kod"
+                maxLength={4}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="is_active" className="text-right">Faol</Label>
+              <div className="col-span-3 flex items-center">
+                <input
+                  id="is_active"
+                  type="checkbox"
+                  checked={newEmployee.is_active}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, is_active: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddEmployeeDialog(false)}>Bekor qilish</Button>
+            <Button onClick={handleAddEmployee}>Qo'shish</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Role Dialog */}
+      <Dialog open={showAddRoleDialog} onOpenChange={setShowAddRoleDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Yangi rol qo'shish</DialogTitle>
+            <DialogDescription>Rol nomini kiriting.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role_name" className="text-right">Rol nomi*</Label>
+              <Input
+                id="role_name"
+                value={newRole.name}
+                onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                className="col-span-3"
+                placeholder="Rol nomi"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddRoleDialog(false)}>Bekor qilish</Button>
+            <Button onClick={handleAddRole}>Qo'shish</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Role Confirmation Dialog */}
+      <Dialog open={isDeleteRoleConfirmOpen} onOpenChange={setIsDeleteRoleConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Rolni o'chirishni tasdiqlang</DialogTitle>
+            <DialogDescription>
+              Haqiqatan ham <strong>"{roleToDelete?.name || 'Noma\'lum'}"</strong> rolini o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.
+              {roleToDelete?.employee_count > 0 && (
+                <span className="block mt-2 text-red-600 dark:text-red-400">
+                  Diqqat: Bu rolga {roleToDelete.employee_count} ta xodim biriktirilgan. Rolni o'chirish uchun avval xodimlarni boshqa rolga o'tkazing.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsDeleteRoleConfirmOpen(false); setRoleToDelete(null); }}>
+              Bekor qilish
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteRole}
+              disabled={roleToDelete?.employee_count > 0}
+            >
+              O'chirish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Product Dialog */}
+      <Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Yangi mahsulot qo'shish</DialogTitle>
+            <DialogDescription>Mahsulot ma'lumotlarini kiriting.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="product_name" className="text-right">Nomi*</Label>
+              <Input
+                id="product_name"
+                value={newProduct.name}
+                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                className="col-span-3"
+                placeholder="Mahsulot nomi"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="price" className="text-right">Narx*</Label>
+              <Input
+                id="price"
+                type="number"
+                value={newProduct.price}
+                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                className="col-span-3"
+                placeholder="Narx (so'mda)"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cost_price" className="text-right">Tannarx</Label>
+              <Input
+                id="cost_price"
+                type="number"
+                value={newProduct.cost_price}
+                onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })}
+                className="col-span-3"
+                placeholder="Tannarx (so'mda)"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="category_id" className="text-right">Kategoriya*</Label>
+              <Select
+                value={newProduct.category_id}
+                onValueChange={(value) => setNewProduct({ ...newProduct, category_id: value })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Kategoriyani tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {validCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id.toString()}>
+                      {category.name || "Noma'lum"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="description" className="text-right">Tavsif</Label>
+              <Input
+                id="description"
+                value={newProduct.description}
+                onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                className="col-span-3"
+                placeholder="Mahsulot tavsifi"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="image" className="text-right">Rasm</Label>
+              <Input
+                id="image"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setNewProduct({ ...newProduct, image: e.target.files[0] })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="is_active" className="text-right">Faol</Label>
+              <div className="col-span-3 flex items-center">
+                <input
+                  id="is_active"
+                  type="checkbox"
+                  checked={newProduct.is_active}
+                  onChange={(e) => setNewProduct({ ...newProduct, is_active: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddProductDialog(false)}>Bekor qilish</Button>
+            <Button onClick={handleAddProduct}>Qo'shish</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Details Modal */}
+      <Dialog open={showOrderDetailsModal} onOpenChange={handleModalClose}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Buyurtma #{selectedOrderDetails?.id || '...'}</DialogTitle>
+            <DialogDescription>Buyurtma haqida batafsil ma'lumot.</DialogDescription>
+          </DialogHeader>
+          {isLoadingOrderDetails ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+            </div>
+          ) : orderDetailsError ? (
+            <div className="py-10 text-center text-red-600 dark:text-red-400">
+              {orderDetailsError}
+            </div>
+          ) : selectedOrderDetails ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Mijoz</p>
+                  <p className="text-sm font-medium">{selectedOrderDetails.customer_name || 'Noma\'lum'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Sana</p>
+                  <p className="text-sm font-medium">
+                    {new Date(selectedOrderDetails.created_at).toLocaleString('uz-UZ', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Holat</p>
+                  <Badge variant={
+                    selectedOrderDetails.status === 'completed' ? 'success' :
+                    selectedOrderDetails.status === 'cancelled' ? 'destructive' :
+                    selectedOrderDetails.status === 'pending' ? 'warning' :
+                    selectedOrderDetails.status === 'ready' ? 'info' :
+                    'outline'
+                  }>
+                    {selectedOrderDetails.status_display || 'N/A'}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">To'lov usuli</p>
+                  <p className="text-sm font-medium">{selectedOrderDetails.payment_method_display || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Buyurtma turi</p>
+                  <p className="text-sm font-medium">{selectedOrderDetails.order_type_display || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Xodim</p>
+                  <p className="text-sm font-medium">
+                    {selectedOrderDetails.created_by?.first_name || ''}{' '}
+                    {selectedOrderDetails.created_by?.last_name || 'N/A'}
+                  </p>
+                </div>
+              </div>
+              <Separator />
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Mahsulotlar</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Mahsulot</TableHead>
+                      <TableHead className="text-right">Miqdor</TableHead>
+                      <TableHead className="text-right">Narx</TableHead>
+                      <TableHead className="text-right">Jami</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedOrderDetails.items && selectedOrderDetails.items.length > 0 ? (
+                      selectedOrderDetails.items.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{item.product_details?.name || 'Noma\'lum'}</TableCell>
+                          <TableCell className="text-right">{item.quantity || 0}</TableCell>
+                          <TableCell className="text-right">{(item.unit_price || 0).toLocaleString()} so'm</TableCell>
+                          <TableCell className="text-right">{(item.total_price || 0).toLocaleString()} so'm</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                          Mahsulotlar topilmadi.
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          )) : (
-            <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                Buyurtmalar topilmadi.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </CardContent>
-  </Card>
-</div>
-)}
-{activeTab === "products" && (
-<div className="space-y-6">
-  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-    <h2 className="text-2xl font-bold tracking-tight">Mahsulotlar</h2>
-    <Button onClick={() => setShowAddProductDialog(true)}>
-      <Plus className="mr-2 h-4 w-4" /> Yangi mahsulot qo'shish
-    </Button>
-  </div>
-  <Card>
-    <CardHeader>
-      <CardTitle>Mahsulotlar ro'yxati</CardTitle>
-      <CardDescription>Barcha mavjud mahsulotlar va ularning narxlari.</CardDescription>
-    </CardHeader>
-    <CardContent className="p-0">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Mahsulot nomi</TableHead>
-            <TableHead className="text-right">Narx</TableHead>
-            <TableHead className="hidden sm:table-cell">Tavsif</TableHead>
-            <TableHead className="text-right">Holat</TableHead>
-            <TableHead className="text-right">Amallar</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {validProducts.length > 0 ? validProducts.map((product, index) => (
-            <TableRow key={index}>
-              <TableCell className="font-medium flex items-center gap-2">
-                <img
-                  src={product.image || "/placeholder-product.jpg"}
-                  alt={product.name || "Mahsulot"}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-                <span>{product.name || "Noma'lum"}</span>
-              </TableCell>
-              <TableCell className="text-right">{(product.price || 0).toLocaleString()} so'm</TableCell>
-              <TableCell className="hidden sm:table-cell">{product.description || "Tavsif yo'q"}</TableCell>
-              <TableCell className="text-right">
-                <Badge variant={product.is_active ? 'success' : 'secondary'}>
-                  {product.is_active ? 'Faol' : 'Nofaol'}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteProduct(product)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  O'chirish
+                  </TableBody>
+                </Table>
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Jami (Mahsulotlar):</span>
+                  <span className="font-medium">
+                    {(selectedOrderDetails.items?.reduce((sum, item) => sum + parseFloat(item.total_price || 0), 0) || 0).toLocaleString()} so'm
+                  </span>
+                </div>
+                {selectedOrderDetails.service_fee_percent > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>Xizmat haqi ({selectedOrderDetails.service_fee_percent}%):</span>
+                    <span className="font-medium">
+                      {((selectedOrderDetails.items?.reduce((sum, item) => sum + parseFloat(item.total_price || 0), 0) || 0) * (selectedOrderDetails.service_fee_percent / 100)).toLocaleString()} so'm
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-semibold">
+                  <span>Umumiy:</span>
+                  <span>{(selectedOrderDetails.final_price || 0).toLocaleString()} so'm</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => printReceipt(selectedOrderDetails)}>
+                  <Printer className="mr-2 h-4 w-4" /> Chek chop etish
                 </Button>
-              </TableCell>
-            </TableRow>
-          )) : (
-            <TableRow>
-              <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                Mahsulotlar topilmadi.
-              </TableCell>
-            </TableRow>
+                {(selectedOrderDetails.status === 'pending' || selectedOrderDetails.status === 'processing' || selectedOrderDetails.status === 'ready') && (
+                  <Button variant="destructive" onClick={() => handleCancelOrder(selectedOrderDetails.id)}>
+                    Bekor qilish
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="py-10 text-center text-muted-foreground">
+              Ma'lumotlar topilmadi.
+            </div>
           )}
-        </TableBody>
-      </Table>
-    </CardContent>
-  </Card>
-</div>
-)}
-{activeTab === "employees" && (
-<div className="space-y-6">
-  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-    <h2 className="text-2xl font-bold tracking-tight">Xodimlar</h2>
-    <Button onClick={() => setShowAddEmployeeDialog(true)}>
-      <Plus className="mr-2 h-4 w-4" /> Yangi xodim qo'shish
-    </Button>
-  </div>
-  <Card>
-    <CardHeader>
-      <CardTitle>Xodimlar ro'yxati</CardTitle>
-      <CardDescription>Restoraningizdagi barcha xodimlar va ularning rollari.</CardDescription>
-    </CardHeader>
-    <CardContent className="p-0">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[100px]">ID</TableHead>
-            <TableHead>Ism</TableHead>
-            <TableHead className="hidden sm:table-cell">Rol</TableHead>
-            <TableHead className="hidden md:table-cell">Telefon</TableHead>
-            <TableHead className="text-right">Holat</TableHead>
-            <TableHead className="text-right">Amallar</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {validXodim.length > 0 ? validXodim.map((employee, index) => (
-            <TableRow key={employee.id || index}>
-              <TableCell className="font-medium">{employee.id || 'N/A'}</TableCell>
-              <TableCell>{employee.first_name} {employee.last_name}</TableCell>
-              <TableCell className="hidden sm:table-cell">{employee.role?.name || 'N/A'}</TableCell>
-              <TableCell className="hidden md:table-cell">{employee.phone || 'N/A'}</TableCell>
-              <TableCell className="text-right">
-                <Badge variant={employee.is_active ? 'success' : 'secondary'}>
-                  {employee.is_active ? 'Faol' : 'Nofaol'}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteEmployee(employee)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  O'chirish
-                </Button>
-              </TableCell>
-            </TableRow>
-          )) : (
-            <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                Xodimlar topilmadi.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </CardContent>
-  </Card>
-</div>
-)}
-{activeTab === "roles" && (
-<div className="space-y-6">
-  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-    <h2 className="text-2xl font-bold tracking-tight">Rollar</h2>
-    <Button onClick={() => setShowAddRoleDialog(true)}>
-      <Plus className="mr-2 h-4 w-4" /> Yangi rol qo'shish
-    </Button>
-  </div>
-  <Card>
-    <CardHeader>
-      <CardTitle>Rollar ro'yxati</CardTitle>
-      <CardDescription>Xodimlarga biriktiriladigan rollar.</CardDescription>
-    </CardHeader>
-    <CardContent className="p-0">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[100px]">ID</TableHead>
-            <TableHead>Nomi</TableHead>
-            <TableHead className="hidden sm:table-cell text-right">Xodimlar soni</TableHead>
-            <TableHead className="text-right">Amallar</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {validRolesList.length > 0 ? validRolesList.map((role, index) => (
-            <TableRow key={role.id || index}>
-              <TableCell className="font-medium">{role.id || 'N/A'}</TableCell>
-              <TableCell>{role.name || 'Noma\'lum'}</TableCell>
-              <TableCell className="hidden sm:table-cell text-right">{role.employee_count ?? role.count ?? 0}</TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteRole(role)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  O'chirish
-                </Button>
-              </TableCell>
-            </TableRow>
-          )) : (
-            <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                Rollar topilmadi.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </CardContent>
-  </Card>
-</div>
-)}
-{activeTab === "reports" && (
-<div className="space-y-6">
-  <h2 className="text-2xl font-bold tracking-tight">Hisobotlar</h2>
-  <Tabs defaultValue="employees" className="space-y-4">
-    <TabsList>
-      <TabsTrigger value="employees">Xodimlar bo'yicha</TabsTrigger>
-      <TabsTrigger value="products">Mahsulotlar bo'yicha</TabsTrigger>
-      <TabsTrigger value="customers">Mijozlar bo'yicha</TabsTrigger>
-      <TabsTrigger value="charts">Diagrammalar</TabsTrigger>
-    </TabsList>
-    <TabsContent value="employees" className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Xodimlar bo'yicha hisobot</CardTitle>
-          <CardDescription>Xodimlarning buyurtmalari va savdo natijalari.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Xodim</TableHead>
-                <TableHead className="text-right">Buyurtmalar soni</TableHead>
-                <TableHead className="text-right">Jami savdo</TableHead>
-                <TableHead className="text-right">O'rtacha chek</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {validEmployeeReport.length > 0 ? validEmployeeReport.map((report, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{report.employee_name || "Noma'lum"}</TableCell>
-                  <TableCell className="text-right">{report.orders_count ?? 0}</TableCell>
-                  <TableCell className="text-right">{(report.total_sales ?? 0).toLocaleString()} so'm</TableCell>
-                  <TableCell className="text-right">{(report.average_check ?? 0).toLocaleString()} so'm</TableCell>
-                </TableRow>
-              )) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                    Hisobot ma'lumotlari topilmadi.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </TabsContent>
-    <TabsContent value="products" className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Mahsulotlar bo'yicha hisobot</CardTitle>
-          <CardDescription>Eng ko'p sotilgan mahsulotlar va ularning savdolari.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mahsulot</TableHead>
-                <TableHead className="text-right">Sotilgan miqdor</TableHead>
-                <TableHead className="text-right">Jami savdo</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {validProducts.length > 0 ? validProducts.map((product, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{product.product_name || "Noma'lum"}</TableCell>
-                  <TableCell className="text-right">{product.quantity_sold ?? 0}</TableCell>
-                  <TableCell className="text-right">{(product.total_sales ?? 0).toLocaleString()} so'm</TableCell>
-                </TableRow>
-              )) : (
-                <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                    Hisobot ma'lumotlari topilmadi.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </TabsContent>
-    <TabsContent value="customers" className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Mijozlar bo'yicha hisobot</CardTitle>
-          <CardDescription>Mijozlarning buyurtmalari va savdo statistikasi.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Doimiy mijozlar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Buyurtmalar soni: {customerReport.regular_customers.orders_count ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Jami savdo: {(customerReport.regular_customers.total_sales ?? 0).toLocaleString()} so'm</p>
-                <p className="text-sm text-muted-foreground">O'rtacha chek: {(customerReport.regular_customers.average_check ?? 0).toLocaleString()} so'm</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Yangi mijozlar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Buyurtmalar soni: {customerReport.new_customers.orders_count ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Jami savdo: {(customerReport.new_customers.total_sales ?? 0).toLocaleString()} so'm</p>
-                <p className="text-sm text-muted-foreground">O'rtacha chek: {(customerReport.new_customers.average_check ?? 0).toLocaleString()} so'm</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Bir martalik mijozlar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Buyurtmalar soni: {customerReport.one_time_customers.orders_count ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Jami savdo: {(customerReport.one_time_customers.total_sales ?? 0).toLocaleString()} so'm</p>
-                <p className="text-sm text-muted-foreground">O'rtacha chek: {(customerReport.one_time_customers.average_check ?? 0).toLocaleString()} so'm</p>
-              </CardContent>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
-    </TabsContent>
-    <TabsContent value="charts" className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>To'lov turlari bo'yicha</CardTitle>
-            <CardDescription>Buyurtmalarning to'lov usullari bo'yicha taqsimoti.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {validPaymentMethods.length > 0 && isClient ? (
-              <div className="h-[300px]">
-                <Chart
-                  options={{
-                    chart: { type: 'donut', background: 'transparent' },
-                    theme: { mode: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
-                    labels: validPaymentMethods.map(method => method.payment_method_display || 'Noma\'lum'),
-                    colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
-                    dataLabels: { enabled: true, formatter: (val) => `${val.toFixed(1)}%` },
-                    legend: { position: 'bottom', labels: { colors: '#9ca3af' } },
-                    plotOptions: {
-                      pie: {
-                        donut: {
-                          labels: {
-                            show: true,
-                            total: {
-                              show: true,
-                              label: 'Jami',
-                              formatter: () => `${validPaymentMethods.reduce((sum, method) => sum + (method.count || 0), 0)}`,
-                            },
-                          },
-                        },
-                      },
-                    },
-                    tooltip: { theme: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
-                  }}
-                  series={validPaymentMethods.map(method => method.count || 0)}
-                  type="donut"
-                  height={300}
-                />
-              </div>
-            ) : (
-              <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                Ma'lumotlar yuklanmoqda...
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Buyurtma turlari bo'yicha</CardTitle>
-            <CardDescription>Buyurtmalarning turlari bo'yicha taqsimoti.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {validOrderTypes.length > 0 && isClient ? (
-              <div className="h-[300px]">
-                <Chart
-                  options={{
-                    chart: { type: 'donut', background: 'transparent' },
-                    theme: { mode: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
-                    labels: validOrderTypes.map(type => type.order_type_display || 'Noma\'lum'),
-                    colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
-                    dataLabels: { enabled: true, formatter: (val) => `${val.toFixed(1)}%` },
-                    legend: { position: 'bottom', labels: { colors: '#9ca3af' } },
-                    plotOptions: {
-                      pie: {
-                        donut: {
-                          labels: {
-                            show: true,
-                            total: {
-                              show: true,
-                              label: 'Jami',
-                              formatter: () => `${validOrderTypes.reduce((sum, type) => sum + (type.count || 0), 0)}`,
-                            },
-                          },
-                        },
-                      },
-                    },
-                    tooltip: { theme: typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light' },
-                  }}
-                  series={validOrderTypes.map(type => type.count || 0)}
-                  type="donut"
-                  height={300}
-                />
-              </div>
-            ) : (
-              <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                Ma'lumotlar yuklanmoqda...
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </TabsContent>
-  </Tabs>
-</div>
-)}
-{activeTab === "settings" && (
-<div className="space-y-6">
-  <h2 className="text-2xl font-bold tracking-tight">Sozlamalar</h2>
-  <Card>
-    <CardHeader>
-      <CardTitle>Restoran ma'lumotlari</CardTitle>
-      <CardDescription>Restoran haqidagi asosiy ma'lumotlarni boshqaring.</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="business-name">Biznes nomi *</Label>
-          <Input
-            id="business-name"
-            placeholder="SmartResto"
-            defaultValue="SmartResto"
-            className="w-full"
-            disabled
-          />
-          <p className="text-sm text-muted-foreground">
-            Bu restoran nomini o'zgartirish uchun administrator bilan bog'laning.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone-number">Telefon raqami *</Label>
-          <Input
-            id="phone-number"
-            placeholder="+998 71 123 45 67"
-            defaultValue="+998 71 123 45 67"
-            className="w-full"
-          />
-          <p className="text-sm text-muted-foreground">
-            Mijozlar bilan aloqa qilish uchun telefon raqami.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email *</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="info@smartresto.uz"
-            defaultValue="info@smartresto.uz"
-            className="w-full"
-          />
-          <p className="text-sm text-muted-foreground">
-            Rasmiy elektron pochta manzili.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="description">Tavsif</Label>
-          <textarea
-            id="description"
-            placeholder="Biz haqimizda qisqacha ma'lumot..."
-            defaultValue="SmartResto - eng yaxshi taomlarni taklif qiluvchi restoran."
-            className="w-full h-24 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
-          />
-          <p className="text-sm text-muted-foreground">
-            Restoran haqida qisqacha ma'lumot.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="language">Tizim sozlamalari</Label>
-          <Select defaultValue="uz">
-            <SelectTrigger id="language" className="w-full">
-              <SelectValue placeholder="Tilni tanlang" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="uz">O'zbek</SelectItem>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="ru">Русский</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-sm text-muted-foreground">
-            Tizimda ishlatiladigan tilni tanlang.
-          </p>
-        </div>
-        <div className="flex justify-end">
-          <Button className="bg-sky-500 hover:bg-sky-600">
-            Saqlash
-          </Button>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-</div>
-)}
-<Dialog open={showAddEmployeeDialog} onOpenChange={setShowAddEmployeeDialog}>
-<DialogContent>
-  <DialogHeader>
-    <DialogTitle>Yangi xodim qo'shish</DialogTitle>
-    <DialogDescription>
-      Xodim haqidagi ma'lumotlarni kiriting. (*) bilan belgilangan maydonlar majburiy.
-    </DialogDescription>
-  </DialogHeader>
-  <div className="grid gap-4 py-4">
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="username" className="text-right">
-        Username*
-      </Label>
-      <Input
-        id="username"
-        value={newEmployee.username}
-        onChange={(e) => setNewEmployee({ ...newEmployee, username: e.target.value })}
-        className="col-span-3"
-      />
+        </DialogContent>
+      </Dialog>
     </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="first_name" className="text-right">
-        Ism*
-      </Label>
-      <Input
-        id="first_name"
-        value={newEmployee.first_name}
-        onChange={(e) => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
-        className="col-span-3"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="last_name" className="text-right">
-        Familiya*
-      </Label>
-      <Input
-        id="last_name"
-        value={newEmployee.last_name}
-        onChange={(e) => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
-        className="col-span-3"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="role_id" className="text-right">
-        Rol*
-      </Label>
-      <Select
-        value={newEmployee.role_id}
-        onValueChange={(value) => setNewEmployee({ ...newEmployee, role_id: value })}
-      >
-        <SelectTrigger className="col-span-3">
-          <SelectValue placeholder="Rolni tanlang" />
-        </SelectTrigger>
-        <SelectContent>
-          {validFetchedRoles.map((role) => (
-            <SelectItem key={role.id} value={role.id.toString()}>
-              {role.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="pin_code" className="text-right">
-        PIN-kod*
-      </Label>
-      <Input
-        id="pin_code"
-        type="text"
-        value={newEmployee.pin_code}
-        onChange={(e) => setNewEmployee({ ...newEmployee, pin_code: e.target.value })}
-        className="col-span-3"
-        placeholder="1234"
-        maxLength={4}
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="is_active" className="text-right">
-        Faol
-      </Label>
-      <div className="col-span-3 flex items-center">
-        <input
-          type="checkbox"
-          id="is_active"
-          checked={newEmployee.is_active}
-          onChange={(e) => setNewEmployee({ ...newEmployee, is_active: e.target.checked })}
-          className="h-4 w-4"
-        />
-      </div>
-    </div>
-  </div>
-  <DialogFooter>
-    <Button variant="outline" onClick={() => setShowAddEmployeeDialog(false)}>
-      Bekor qilish
-    </Button>
-    <Button onClick={handleAddEmployee}>Qo'shish</Button>
-  </DialogFooter>
-</DialogContent>
-</Dialog>
-<Dialog open={showAddRoleDialog} onOpenChange={setShowAddRoleDialog}>
-<DialogContent>
-  <DialogHeader>
-    <DialogTitle>Yangi rol qo'shish</DialogTitle>
-    <DialogDescription>
-      Yangi rol nomini kiriting. Bu rolni keyinchalik xodimlarga biriktirish mumkin.
-    </DialogDescription>
-  </DialogHeader>
-  <div className="grid gap-4 py-4">
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="role_name" className="text-right">
-        Rol nomi*
-      </Label>
-      <Input
-        id="role_name"
-        value={newRole.name}
-        onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-        className="col-span-3"
-      />
-    </div>
-  </div>
-  <DialogFooter>
-    <Button variant="outline" onClick={() => setShowAddRoleDialog(false)}>
-      Bekor qilish
-    </Button>
-    <Button onClick={handleAddRole}>Qo'shish</Button>
-  </DialogFooter>
-</DialogContent>
-</Dialog>
-<Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
-<DialogContent>
-  <DialogHeader>
-    <DialogTitle>Yangi mahsulot qo'shish</DialogTitle>
-    <DialogDescription>
-      Mahsulot haqidagi ma'lumotlarni kiriting. (*) bilan belgilangan maydonlar majburiy.
-    </DialogDescription>
-  </DialogHeader>
-  <div className="grid gap-4 py-4">
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="product_name" className="text-right">
-        Nomi*
-      </Label>
-      <Input
-        id="product_name"
-        value={newProduct.name}
-        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-        className="col-span-3"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="product_price" className="text-right">
-        Narx*
-      </Label>
-      <Input
-        id="product_price"
-        type="number"
-        value={newProduct.price}
-        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-        className="col-span-3"
-        placeholder="10000"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="category_id" className="text-right">
-        Kategoriya*
-      </Label>
-      <Select
-        value={newProduct.category_id}
-        onValueChange={(value) => setNewProduct({ ...newProduct, category_id: value })}
-      >
-        <SelectTrigger className="col-span-3">
-          <SelectValue placeholder="Kategoriyani tanlang" />
-        </SelectTrigger>
-        <SelectContent>
-          {categories.map((category) => (
-            <SelectItem key={category.id} value={category.id.toString()}>
-              {category.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="cost_price" className="text-right">
-        Tannarx
-      </Label>
-      <Input
-        id="cost_price"
-        type="number"
-        value={newProduct.cost_price}
-        onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })}
-        className="col-span-3"
-        placeholder="5000"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="product_image" className="text-right">
-        Rasm
-      </Label>
-      <Input
-        id="product_image"
-        type="file"
-        accept="image/*"
-        onChange={(e) => setNewProduct({ ...newProduct, image: e.target.files[0] })}
-        className="col-span-3"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="product_description" className="text-right">
-        Tavsif
-      </Label>
-      <Input
-        id="product_description"
-        value={newProduct.description}
-        onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-        className="col-span-3"
-      />
-    </div>
-    <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="product_is_active" className="text-right">
-        Faol
-      </Label>
-      <div className="col-span-3 flex items-center">
-        <input
-          type="checkbox"
-          id="product_is_active"
-          checked={newProduct.is_active}
-          onChange={(e) => setNewProduct({ ...newProduct, is_active: e.target.checked })}
-          className="h-4 w-4"
-        />
-      </div>
-    </div>
-  </div>
-  <DialogFooter>
-    <Button variant="outline" onClick={() => setShowAddProductDialog(false)}>
-      Bekor qilish
-    </Button>
-    <Button onClick={handleAddProduct}>Qo'shish</Button>
-  </DialogFooter>
-</DialogContent>
-</Dialog>
-<Dialog open={isDeleteRoleConfirmOpen} onOpenChange={(open) => { setIsDeleteRoleConfirmOpen(open); if (!open) setRoleToDelete(null); }}>
-<DialogContent>
-  <DialogHeader>
-    <DialogTitle>Rolni o'chirishni tasdiqlang</DialogTitle>
-    <DialogDescription>
-      {roleToDelete ? (
-        roleToDelete.employee_count > 0 ? (
-          `"${roleToDelete.name}" rolini o'chirishni xohlaysizmi? Bu rolga hozirda ${roleToDelete.employee_count} ta xodim biriktirilgan. O'chirishdan oldin xodimlarni boshqa rollarga o'tkazing.`
-        ) : (
-          `Haqiqatan ham "${roleToDelete.name}" rolini o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.`
-        )
-      ) : (
-        "Rol ma'lumotlari topilmadi."
-      )}
-    </DialogDescription>
-  </DialogHeader>
-  <DialogFooter>
-    <Button variant="outline" onClick={() => { setIsDeleteRoleConfirmOpen(false); setRoleToDelete(null); }}>
-      Bekor qilish
-    </Button>
-    <Button
-      variant="destructive"
-      onClick={confirmDeleteRole}
-      disabled={roleToDelete?.employee_count > 0}
-    >
-      O'chirish
-    </Button>
-  </DialogFooter>
-</DialogContent>
-</Dialog>
-<Dialog open={showOrderDetailsModal} onOpenChange={handleModalClose}>
-<DialogContent className="max-w-3xl">
-  <DialogHeader>
-    <DialogTitle>Buyurtma tafsilotlari #{selectedOrderDetails?.id || ''}</DialogTitle>
-    <DialogDescription>
-      Buyurtma haqidagi to'liq ma'lumotlar.
-    </DialogDescription>
-  </DialogHeader>
-  {isLoadingOrderDetails ? (
-    <div className="flex items-center justify-center py-10">
-      <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
-    </div>
-  ) : orderDetailsError ? (
-    <div className="py-10 text-center text-red-600 dark:text-red-400">
-      {orderDetailsError}
-    </div>
-  ) : selectedOrderDetails ? (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Mijoz</p>
-          <p className="text-base">{selectedOrderDetails.customer_name || 'Noma\'lum'}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Sana</p>
-          <p className="text-base">
-            {new Date(selectedOrderDetails.created_at).toLocaleString('uz-UZ', { dateStyle: 'medium', timeStyle: 'short' })}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Holat</p>
-          <Badge variant={selectedOrderDetails.status === 'completed' ? 'success' : selectedOrderDetails.status === 'cancelled' ? 'destructive' : selectedOrderDetails.status === 'pending' ? 'warning' : selectedOrderDetails.status === 'ready' ? 'info' : 'outline'}>
-            {selectedOrderDetails.status_display || 'N/A'}
-          </Badge>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Buyurtma turi</p>
-          <p className="text-base">{selectedOrderDetails.order_type_display || 'N/A'}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Xodim</p>
-          <p className="text-base">
-            {selectedOrderDetails.created_by?.first_name || ''} {selectedOrderDetails.created_by?.last_name || 'N/A'}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">To'lov usuli</p>
-          <p className="text-base">{selectedOrderDetails.payment_method_display || 'N/A'}</p>
-        </div>
-      </div>
-      <Separator />
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Mahsulotlar</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Mahsulot</TableHead>
-              <TableHead className="text-right">Miqdor</TableHead>
-              <TableHead className="text-right">Narx</TableHead>
-              <TableHead className="text-right">Jami</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(selectedOrderDetails.items || []).length > 0 ? selectedOrderDetails.items.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell>{item.product_details?.name || 'Noma\'lum'}</TableCell>
-                <TableCell className="text-right">{item.quantity || 0}</TableCell>
-                <TableCell className="text-right">{parseFloat(item.unit_price || 0).toLocaleString()} so'm</TableCell>
-                <TableCell className="text-right">{parseFloat(item.total_price || 0).toLocaleString()} so'm</TableCell>
-              </TableRow>
-            )) : (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  Mahsulotlar topilmadi.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <Separator />
-      <div className="space-y-2">
-        <div className="flex justify-between">
-          <span className="font-medium">Mahsulotlar jami:</span>
-          <span>{(selectedOrderDetails.items?.reduce((sum, item) => sum + parseFloat(item.total_price || 0), 0) ?? 0).toLocaleString()} so'm</span>
-        </div>
-        {selectedOrderDetails.service_fee_percent > 0 && (
-          <div className="flex justify-between">
-            <span className="font-medium">Xizmat haqi ({selectedOrderDetails.service_fee_percent}%):</span>
-            <span>{(selectedOrderDetails.items?.reduce((sum, item) => sum + parseFloat(item.total_price || 0), 0) * (selectedOrderDetails.service_fee_percent / 100) ?? 0).toLocaleString()} so'm</span>
-          </div>
-        )}
-        <div className="flex justify-between text-lg font-semibold">
-          <span>Umumiy:</span>
-          <span>{parseFloat(selectedOrderDetails.final_price || 0).toLocaleString()} so'm</span>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <div className="py-10 text-center text-muted-foreground">
-      Ma'lumotlar topilmadi.
-    </div>
-  )}
-  <DialogFooter>
-    <Button variant="outline" onClick={handleModalClose}>
-      Yopish
-    </Button>
-    {!isLoadingOrderDetails && !orderDetailsError && selectedOrderDetails && (
-      <Button onClick={() => printReceipt(selectedOrderDetails)}>
-        <Printer className="mr-2 h-4 w-4" /> Chek chop etish
-      </Button>
-    )}
-  </DialogFooter>
-</DialogContent>
-</Dialog>
-</main>
-</div>
-</div>
-)
+  )
 }
